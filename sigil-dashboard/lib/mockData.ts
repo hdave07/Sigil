@@ -40,6 +40,10 @@ export const agents: Agent[] = [
     allowedActions: ["web_search"],
     currentJob: "Scrape pricing pages",
     startedAt: "45m ago",
+    // Spawned by Research Agent (a1) to handle the scraping subtask — note its
+    // scope is narrower than its parent's (web_search only, vs. web_search +
+    // draft_email + write_file).
+    parentAgentId: "a1",
   },
   {
     id: "a4",
@@ -64,13 +68,27 @@ export const actions: AgentAction[] = [
     status: "pending",
     missionDescription: "Drafting summary email",
     reason:
-      "Draft Helper was only given permission to search the web. Sending emails was never part of its allowed list, so it paused and asked for approval.",
+      "This agent can only search the web — sending email was never part of the deal, so it stopped instead of guessing.",
     payload: {
       To: "stakeholder@company.com",
       Subject: "Q3 Competitor Pricing Summary",
       Body: "Here are the findings from today's research...",
     },
     requestedAt: "2 min ago",
+  },
+  {
+    id: "act4",
+    agentId: "a2",
+    agentName: "Draft Helper",
+    type: "post_slack",
+    label: "Wants to post an update to Slack",
+    inBounds: false,
+    status: "pending",
+    missionDescription: "Drafting summary email",
+    reason:
+      "Same story — this agent can search the web, that's it. Posting to Slack isn't on that list, so it's checking with you first.",
+    payload: { Channel: "#team-updates", Message: "Draft ready for review — see attached." },
+    requestedAt: "6 min ago",
   },
   {
     id: "act2",
@@ -82,7 +100,7 @@ export const actions: AgentAction[] = [
     status: "pending",
     missionDescription: "Sending weekly stakeholder update",
     reason:
-      "The Update Agent was set up to research and draft, not to send emails directly. This was flagged as outside its original scope.",
+      "This agent's job is research and drafting, not hitting send. Mailing anyone wasn't part of its mission, so it's waiting on you.",
     payload: {
       To: "team@company.com",
       Subject: "Weekly Update — Week 24",
@@ -100,9 +118,23 @@ export const actions: AgentAction[] = [
     status: "pending",
     missionDescription: "Compiling competitor pricing data",
     reason:
-      "The Pricing Agent was only allowed to search the web. Saving files was not on its permitted list, so it stopped and asked for approval.",
+      "This agent's mission only covers searching the web. Saving a file to disk isn't on that list, so it stopped and asked.",
     payload: { Path: "/reports/competitor-pricing-june.csv", Size: "42 KB" },
     requestedAt: "1h ago",
+  },
+  {
+    id: "act5",
+    agentId: "a3",
+    agentName: "Pricing Agent",
+    type: "send_email",
+    label: "Wants to email the pricing report",
+    inBounds: false,
+    status: "pending",
+    missionDescription: "Compiling competitor pricing data",
+    reason:
+      "Its mission is scraping and compiling data, not sending mail. That's outside what it was told to do, so it paused here too.",
+    payload: { To: "you@company.com", Subject: "Competitor Pricing Report", Body: "Attached is the compiled report." },
+    requestedAt: "50 min ago",
   },
 ];
 
@@ -146,5 +178,25 @@ export const auditLog: AuditEvent[] = [
     type: "paused",
     hash: "e9a3d4f17b2c8e5a3f9d1b6c4e7a2f8d",
     prevHash: "f2b1c7e38d4a9f1b6e3c5a8d2f7b4e9c",
+  },
+  {
+    id: "e5",
+    time: "2:31 PM",
+    agentName: "Research Agent",
+    what: "Delegated the scraping subtask to a new child agent, Pricing Agent — scoped down to web_search only",
+    result: "Delegated",
+    type: "allowed",
+    hash: "b7c4a2f9e3d685a1c2f4b8c7d1e6f3a9",
+    prevHash: "e9a3d4f17b2c8e5a3f9d1b6c4e7a2f8d",
+  },
+  {
+    id: "e6",
+    time: "2:43 PM",
+    agentName: "Pricing Agent",
+    what: "Searched the web for competitor pricing pages",
+    result: "Allowed",
+    type: "allowed",
+    hash: "c1d5b3a8f7e29d6a3a5c9b8e2f6d4b1a",
+    prevHash: "b7c4a2f9e3d685a1c2f4b8c7d1e6f3a9",
   },
 ];

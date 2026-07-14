@@ -14,13 +14,37 @@ const statusColor: Record<Agent["status"], "green" | "orange" | "red" | "blue"> 
 };
 
 const resultColor: Record<AuditEventType, string> = {
-  allowed: "#1abc6e",
-  blocked: "#e74c3c",
-  paused: "#e67e22",
-  human: "#e67e22",
+  allowed: "#6b8a6f",
+  blocked: "#a34a42",
+  paused: "#bb6d4a",
+  human: "#bb6d4a",
 };
 
 type FilterKey = "all" | "running" | "waiting";
+
+// Keeps parent/child agents adjacent so delegated agents render indented
+// directly under the agent that spawned them. Children whose parent isn't in
+// the current (filtered) list are left un-indented since there's no parent
+// row above them to nest under.
+function withDelegationOrder(list: Agent[]): Agent[] {
+  const childrenByParent = new Map<string, Agent[]>();
+  const roots: Agent[] = [];
+  for (const a of list) {
+    if (a.parentAgentId && list.some((p) => p.id === a.parentAgentId)) {
+      const siblings = childrenByParent.get(a.parentAgentId) ?? [];
+      siblings.push(a);
+      childrenByParent.set(a.parentAgentId, siblings);
+    } else {
+      roots.push(a);
+    }
+  }
+  const ordered: Agent[] = [];
+  for (const root of roots) {
+    ordered.push(root);
+    ordered.push(...(childrenByParent.get(root.id) ?? []));
+  }
+  return ordered;
+}
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -76,24 +100,38 @@ export default function AgentsPage() {
 
   const selectedPending = selected ? pending.filter((p) => p.agentId === selected.id) : [];
   const selectedAudit = selected ? auditLog.filter((e) => e.agentName === selected.name) : [];
+  const parentAgent = selected?.parentAgentId ? agents.find((a) => a.id === selected.parentAgentId) : undefined;
+  const childAgents = selected ? agents.filter((a) => a.parentAgentId === selected.id) : [];
+
+  const orderedAgents = withDelegationOrder(filteredAgents);
 
   return (
-    <div className="flex flex-col h-full p-8 overflow-hidden">
-      <h1 className="text-xl font-semibold mb-1">Agents</h1>
-      <p className="text-gray-500 mb-6">Overview of all active agents and pending decisions</p>
+    <div className="flex flex-col h-full p-9 overflow-hidden">
+      <div className="flex items-start justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-[26px] font-bold tracking-tight text-ink mb-1">Dashboard</h1>
+          <p className="text-[13px] text-gray-500">Overview of all active agents and pending decisions</p>
+        </div>
+        <Link
+          href="/setup"
+          className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition-opacity shadow-[0_4px_16px_-4px_rgba(74,78,105,0.45)]"
+        >
+          <span className="text-base leading-none">+</span> Declare a mission
+        </Link>
+      </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-3 gap-3 mb-8">
         <StatCard
           label="Active agents"
           value={agents.length}
-          color="text-green"
+          color="text-ink"
           active={filter === "all"}
           onClick={() => setFilter("all")}
         />
         <StatCard
           label="Running"
           value={runningCount}
-          color="text-accent"
+          color="text-green"
           active={filter === "running"}
           onClick={() => toggleFilter("running")}
         />
@@ -102,13 +140,14 @@ export default function AgentsPage() {
           value={pending.length}
           color="text-orange"
           active={filter === "waiting"}
+          emphasize={pending.length > 0}
           onClick={() => toggleFilter("waiting")}
         />
       </div>
 
       <div className="grid grid-cols-[1fr_420px] gap-4 flex-1 min-h-0">
-        <div className="bg-white border border-border rounded-lg overflow-y-auto">
-          <div className="px-5 py-3.5 border-b border-[#e8e8ec] font-semibold flex items-center gap-2 sticky top-0 bg-white z-10">
+        <div className="bg-white border border-border rounded-xl shadow-sm overflow-y-auto">
+          <div className="px-5 py-3.5 border-b border-hairline font-semibold text-[13px] text-ink flex items-center gap-2 sticky top-0 bg-white z-10">
             {sectionLabel}
             {filter !== "all" && (
               <button
@@ -121,7 +160,7 @@ export default function AgentsPage() {
           </div>
           <table className="w-full border-collapse">
             <thead>
-              <tr className="bg-[#f8f8fa] text-[11px] font-semibold text-gray-400">
+              <tr className="bg-zebra eyebrow">
                 <th className="text-left px-4 py-2.5">Agent</th>
                 <th className="text-left px-4 py-2.5">Current job</th>
                 <th className="text-left px-4 py-2.5">Allowed to do</th>
@@ -146,34 +185,48 @@ export default function AgentsPage() {
                   </td>
                 </tr>
               )}
-              {filteredAgents.map((a) => (
-                <tr
-                  key={a.id}
-                  onClick={() => setSelectedId(a.id)}
-                  className={`border-b border-[#f0f0f3] last:border-none cursor-pointer hover:bg-[#fafafa] ${
-                    a.id === selectedId ? "bg-[#eef1ff]" : ""
-                  }`}
-                >
-                  <td
-                    className={`px-4 py-2.5 font-medium text-accent ${
-                      a.id === selectedId ? "border-l-4 border-l-accent" : ""
+              {orderedAgents.map((a) => {
+                const parent = a.parentAgentId ? agents.find((p) => p.id === a.parentAgentId) : undefined;
+                const isNestedChild = Boolean(parent) && filteredAgents.some((f) => f.id === parent!.id);
+                return (
+                  <tr
+                    key={a.id}
+                    onClick={() => setSelectedId(a.id)}
+                    className={`border-b border-hairline last:border-none cursor-pointer hover:bg-zebra ${
+                      a.id === selectedId ? "bg-accent/[0.06]" : ""
                     }`}
                   >
-                    {a.name}
-                  </td>
-                  <td className="px-4 py-2.5">{a.currentJob}</td>
-                  <td className="px-4 py-2.5 text-gray-500">{a.allowedActions.join(", ")}</td>
-                  <td className="px-4 py-2.5">
-                    <Badge color={statusColor[a.status]}>{a.status}</Badge>
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-400">{a.startedAt}</td>
-                </tr>
-              ))}
+                    <td
+                      className={`px-4 py-2.5 font-semibold text-accent ${isNestedChild ? "pl-9" : ""} ${
+                        a.id === selectedId ? "border-l-[3px] border-l-accent" : "border-l-[3px] border-l-transparent"
+                      }`}
+                    >
+                      <div className="flex flex-col">
+                        <span className="flex items-center gap-1">
+                          {isNestedChild && <span className="text-lineageText font-normal">↳</span>}
+                          {a.name}
+                        </span>
+                        {isNestedChild && (
+                          <span className="text-[10px] font-normal text-lineageText/70">
+                            delegated by {parent!.name}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-500">{a.currentJob}</td>
+                    <td className="px-4 py-2.5 text-gray-400 text-[12px]">{a.allowedActions.join(", ")}</td>
+                    <td className="px-4 py-2.5">
+                      <Badge color={statusColor[a.status]}>{a.status}</Badge>
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-400 text-[12px]">{a.startedAt}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
-        <div className="bg-white border border-border rounded-lg overflow-y-auto">
+        <div className="bg-white border border-border rounded-xl shadow-sm overflow-y-auto">
           {!selected && (
             <div className="flex flex-col items-center justify-center h-full text-gray-300 gap-2">
               Select an agent to see its details
@@ -181,9 +234,9 @@ export default function AgentsPage() {
           )}
           {selected && (
             <div>
-              <div className="px-5 py-3.5 border-b border-[#f0f0f3] flex items-start justify-between gap-3">
+              <div className="px-5 py-3.5 border-b border-hairline flex items-start justify-between gap-3">
                 <div>
-                  <div className="font-semibold">{selected.name}</div>
+                  <div className="text-[15px] font-bold text-ink">{selected.name}</div>
                   <div className="text-xs text-gray-500">
                     {selected.currentJob} · started {selected.startedAt}
                   </div>
@@ -192,13 +245,33 @@ export default function AgentsPage() {
               </div>
 
               <div className="p-5">
-                <div className="bg-[#f7f8ff] border border-[#d4daff] rounded-lg p-4 mb-4">
+                {selectedPending.length > 0 && (
+                  <div className="bg-orange/[0.07] border border-orange/30 rounded-lg p-3.5 mb-5 shadow-[0_2px_14px_-6px_rgba(187,109,74,0.35)]">
+                    <div className="text-[12px] font-bold text-orange uppercase tracking-wide mb-2">
+                      Needs your decision
+                    </div>
+                    {selectedPending.map((p) => (
+                      <div key={p.id} className="mb-2.5 last:mb-0">
+                        <div className="text-sm font-semibold text-ink mb-0.5">{p.label}</div>
+                        <div className="text-[11px] text-gray-500 mb-1.5">{p.requestedAt}</div>
+                        <Link
+                          href={`/approvals?actionId=${p.id}`}
+                          className="text-[11px] font-semibold text-accent hover:underline"
+                        >
+                          Review in approval queue →
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="bg-accent/[0.045] border border-accent/20 rounded-lg p-4 mb-4">
                   <div className="mb-3">
-                    <div className="text-[11px] font-semibold text-gray-500 uppercase mb-1">Mission</div>
-                    <div className="text-sm">{mission?.description ?? selected.missionDescription}</div>
+                    <div className="eyebrow mb-1">Mission</div>
+                    <div className="text-[13px] leading-relaxed">{mission?.description ?? selected.missionDescription}</div>
                   </div>
                   <div>
-                    <div className="text-[11px] font-semibold text-gray-500 uppercase mb-1">Mission hash</div>
+                    <div className="eyebrow mb-1">Mission hash</div>
                     <span className="font-mono text-[11px] bg-ink text-[#7ee89a] px-2 py-0.5 rounded inline-block">
                       {mission ? mission.hash : "…"}
                     </span>
@@ -206,53 +279,66 @@ export default function AgentsPage() {
                 </div>
 
                 <div className="mb-4">
-                  <div className="text-[11px] font-semibold text-gray-500 uppercase mb-2">Allowed to do</div>
+                  <div className="eyebrow mb-2">Allowed to do</div>
                   <div className="flex flex-wrap gap-1.5">
                     {selected.allowedActions.map((action) => (
-                      <span key={action} className="badge bg-[#f0f0f3] text-gray-600">
+                      <span key={action} className="badge bg-gray-100 text-gray-500 font-medium">
                         {action}
                       </span>
                     ))}
                   </div>
                 </div>
 
-                <div className="mb-4">
-                  <div className="text-[11px] font-semibold text-gray-500 uppercase mb-2">Pending decision</div>
-                  {selectedPending.length === 0 && (
-                    <div className="text-sm text-gray-400">Nothing waiting on you for this agent.</div>
-                  )}
-                  {selectedPending.map((p) => (
-                    <div key={p.id} className="bg-[#fffbf5] border border-[#f5dfb8] rounded-lg p-3 mb-2 last:mb-0">
-                      <div className="text-sm font-semibold mb-0.5">{p.label}</div>
-                      <div className="text-[11px] text-gray-500 mb-2">{p.requestedAt}</div>
-                      <Link
-                        href={`/approvals?actionId=${p.id}`}
-                        className="text-[11px] font-medium text-accent hover:underline"
+                {(parentAgent || childAgents.length > 0) && (
+                  <div className="mb-4">
+                    <div className="eyebrow mb-2">Delegation</div>
+                    {parentAgent && (
+                      <button
+                        onClick={() => setSelectedId(parentAgent.id)}
+                        className="w-full text-left bg-lineage/[0.05] border border-lineage/25 rounded-lg p-3 mb-2 last:mb-0 hover:bg-lineage/[0.09] transition-colors"
                       >
-                        Review in approval queue →
-                      </Link>
-                    </div>
-                  ))}
-                </div>
+                        <div className="text-[11px] text-gray-500 mb-0.5">Delegated by</div>
+                        <div className="text-sm font-semibold text-lineageText">{parentAgent.name}</div>
+                        <div className="text-[11px] text-gray-500 mt-1">
+                          This agent's scope ({selected.allowedActions.join(", ")}) is narrower than{" "}
+                          {parentAgent.name}'s ({parentAgent.allowedActions.join(", ")}).
+                        </div>
+                      </button>
+                    )}
+                    {childAgents.map((child) => (
+                      <button
+                        key={child.id}
+                        onClick={() => setSelectedId(child.id)}
+                        className="w-full text-left bg-lineage/[0.05] border border-lineage/25 rounded-lg p-3 mb-2 last:mb-0 hover:bg-lineage/[0.09] transition-colors"
+                      >
+                        <div className="text-[11px] text-gray-500 mb-0.5">Delegated to</div>
+                        <div className="text-sm font-semibold text-lineageText">{child.name}</div>
+                        <div className="text-[11px] text-gray-500 mt-1">
+                          Given a narrower scope: {child.allowedActions.join(", ")}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <div>
-                  <div className="text-[11px] font-semibold text-gray-500 uppercase mb-2">This agent's activity</div>
+                  <div className="eyebrow mb-2">This agent's activity</div>
                   {selectedAudit.length === 0 && (
                     <div className="text-sm text-gray-400">No activity recorded yet.</div>
                   )}
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-1.5">
                     {selectedAudit.map((ev) => (
-                      <div key={ev.id} className="text-[12px] border-b border-[#f0f0f3] last:border-none pb-2">
+                      <div key={ev.id} className="text-[11px] border-b border-hairline last:border-none pb-1.5">
                         <div className="flex items-center justify-between gap-2 mb-0.5">
                           <span className="text-gray-400">{ev.time}</span>
                           <span
-                            className="badge whitespace-nowrap"
-                            style={{ background: `${resultColor[ev.type]}18`, color: resultColor[ev.type] }}
+                            className="badge whitespace-nowrap text-[10px]"
+                            style={{ background: `${resultColor[ev.type]}15`, color: resultColor[ev.type] }}
                           >
                             {ev.result}
                           </span>
                         </div>
-                        <div>{ev.what}</div>
+                        <div className="text-gray-600">{ev.what}</div>
                       </div>
                     ))}
                   </div>
@@ -271,23 +357,27 @@ function StatCard({
   value,
   color,
   active,
+  emphasize,
   onClick,
 }: {
   label: string;
   value: number;
   color: string;
   active: boolean;
+  emphasize?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`text-left bg-white border rounded-lg px-5 py-4 transition-colors ${
-        active ? "border-accent ring-2 ring-accent/20" : "border-border hover:border-gray-300"
-      }`}
+      className={`text-left border rounded-xl px-5 py-4 transition-colors ${
+        emphasize
+          ? "bg-orange/[0.06] border-orange/30 shadow-[0_2px_14px_-4px_rgba(187,109,74,0.3)]"
+          : "bg-white border-border hover:border-gray-300"
+      } ${active ? "ring-2 ring-accent/25 border-accent/60" : ""}`}
     >
-      <div className={`text-2xl font-bold mb-0.5 ${color}`}>{value}</div>
-      <div className="text-xs text-gray-500">{label}</div>
+      <div className={`font-bold mb-0.5 ${color} ${emphasize ? "text-3xl" : "text-2xl"}`}>{value}</div>
+      <div className={`text-xs ${emphasize ? "text-orange font-medium" : "text-gray-500"}`}>{label}</div>
     </button>
   );
 }

@@ -23,6 +23,7 @@ export interface Agent {
   allowedActions: string[];
   currentJob?: string;
   startedAt: string;
+  parentAgentId?: string; // set when this agent was spawned by another agent (delegation)
 }
 
 export interface AgentAction {

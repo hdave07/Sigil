@@ -1,8 +1,8 @@
 const styles: Record<string, string> = {
-  green: "bg-[#eafaf3] text-[#0f7a47]",
-  orange: "bg-[#fff4e6] text-[#b85c00]",
-  red: "bg-[#fef0f0] text-[#c0392b]",
-  blue: "bg-[#eef1ff] text-accent",
+  green: "bg-green/15 text-green",
+  orange: "bg-orange/15 text-orange",
+  red: "bg-red/12 text-red",
+  blue: "bg-accent/10 text-accent",
 };
 
 export default function Badge({
