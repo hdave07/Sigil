@@ -1,0 +1,6 @@
+{
+  "/audit/page": "app/audit/page.js",
+  "/approvals/page": "app/approvals/page.js",
+  "/setup/page": "app/setup/page.js",
+  "/agents/page": "app/agents/page.js"
+}
