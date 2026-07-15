@@ -131,17 +131,17 @@ function ApprovalsContent() {
                   <div
                     key={item.id}
                     onClick={() => setSelectedId(item.id)}
-                    className={`px-5 py-3.5 border-b border-hairline last:border-none cursor-pointer transition-colors border-l-[3px] ${
-                      isChild ? "pl-9" : ""
+                    className={`px-5 py-3.5 border-b border-hairline last:border-none cursor-pointer transition-colors ${
+                      isChild ? "ml-9" : ""
                     } ${
                       item.id === selectedId
-                        ? "bg-accent/[0.06] border-l-accent"
-                        : "border-l-orange/40 hover:bg-zebra"
+                        ? "bg-accent/[0.13] shadow-[inset_0_1px_0_rgba(74,78,105,0.08)]"
+                        : "hover:bg-zebra"
                     }`}
                   >
                     <div className="text-sm font-semibold text-ink mb-1">{item.label}</div>
                     <div className="text-[12px] text-orange leading-snug mb-1.5">{item.reason}</div>
-                    <div className="text-[10px] text-gray-300">{item.requestedAt}</div>
+                    <div className="text-[10px] text-gray-400">{item.requestedAt}</div>
                   </div>
                 ))}
               </div>
@@ -239,7 +239,7 @@ function ApprovalsContent() {
                 height="22"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#6b8a6f"
+                stroke="#3f7d52"
                 strokeWidth="3"
                 strokeLinecap="round"
                 strokeLinejoin="round"

@@ -14,7 +14,7 @@ const statusColor: Record<Agent["status"], "green" | "orange" | "red" | "blue"> 
 };
 
 const resultColor: Record<AuditEventType, string> = {
-  allowed: "#6b8a6f",
+  allowed: "#3f7d52",
   blocked: "#a34a42",
   paused: "#bb6d4a",
   human: "#bb6d4a",
@@ -193,12 +193,12 @@ export default function AgentsPage() {
                     key={a.id}
                     onClick={() => setSelectedId(a.id)}
                     className={`border-b border-hairline last:border-none cursor-pointer hover:bg-zebra ${
-                      a.id === selectedId ? "bg-accent/[0.06]" : ""
+                      a.id === selectedId ? "bg-accent/[0.13]" : ""
                     }`}
                   >
                     <td
                       className={`px-4 py-2.5 font-semibold text-accent ${isNestedChild ? "pl-9" : ""} ${
-                        a.id === selectedId ? "border-l-[3px] border-l-accent" : "border-l-[3px] border-l-transparent"
+                        a.id === selectedId ? "border-l-[5px] border-l-accent" : "border-l-[5px] border-l-transparent"
                       }`}
                     >
                       <div className="flex flex-col">
@@ -370,10 +370,10 @@ function StatCard({
   return (
     <button
       onClick={onClick}
-      className={`text-left border rounded-xl px-5 py-4 transition-colors ${
+      className={`text-left border rounded-xl px-5 py-4 transition-all ${
         emphasize
-          ? "bg-orange/[0.06] border-orange/30 shadow-[0_2px_14px_-4px_rgba(187,109,74,0.3)]"
-          : "bg-white border-border hover:border-gray-300"
+          ? "bg-orange/[0.16] border-orange/60 shadow-[0_4px_18px_-4px_rgba(187,109,74,0.4)] hover:border-orange/80 hover:shadow-[0_6px_22px_-4px_rgba(187,109,74,0.5)]"
+          : "bg-white border-border shadow-sm hover:border-gray-300 hover:shadow-md"
       } ${active ? "ring-2 ring-accent/25 border-accent/60" : ""}`}
     >
       <div className={`font-bold mb-0.5 ${color} ${emphasize ? "text-3xl" : "text-2xl"}`}>{value}</div>

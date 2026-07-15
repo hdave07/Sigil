@@ -5,7 +5,7 @@ import { getAgents, getAuditLog } from "@/lib/api";
 import { Agent, AuditEvent, AuditEventType } from "@/lib/types";
 
 const resultColor: Record<AuditEventType, string> = {
-  allowed: "#6b8a6f",
+  allowed: "#3f7d52",
   blocked: "#a34a42",
   paused: "#bb6d4a",
   human: "#bb6d4a",
@@ -148,58 +148,42 @@ export default function AuditPage() {
 
       {!loading && viewMode === "flat" && (
         <div className="bg-white border border-border rounded-xl shadow-sm flex-1 overflow-y-auto">
-          <table className="w-full border-collapse table-fixed">
-            <colgroup>
-              <col style={{ width: 72 }} />
-              <col style={{ width: 140 }} />
-              <col />
-              <col style={{ width: 160 }} />
-              <col style={{ width: 155 }} />
-            </colgroup>
-            <thead>
-              <tr className="bg-zebra eyebrow">
-                <th className="text-left px-3.5 py-2.5">Time</th>
-                <th className="text-left px-3.5 py-2.5">Agent</th>
-                <th className="text-left px-3.5 py-2.5">What happened</th>
-                <th className="text-left px-3.5 py-2.5">Result</th>
-                <th className="text-left px-3.5 py-2.5">Proof</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((ev, i) => (
-                <tr key={ev.id} className={i % 2 ? "bg-zebra" : "bg-white"}>
-                  <td className="px-3.5 py-2 text-gray-400 whitespace-nowrap">{ev.time}</td>
-                  <td
-                    className={`px-3.5 py-2 font-semibold whitespace-nowrap ${
-                      ev.agentName === "You" ? "text-orange" : "text-accent"
-                    }`}
-                  >
-                    {ev.agentName}
-                  </td>
-                  <td className="px-3.5 py-2 text-gray-600">{ev.what}</td>
-                  <td className="px-3.5 py-2">
-                    <span
-                      className="badge whitespace-nowrap"
-                      style={{ background: `${resultColor[ev.type]}15`, color: resultColor[ev.type] }}
-                    >
-                      {ev.result}
-                    </span>
-                  </td>
-                  <td className="px-3.5 py-2">
-                    <span className="font-mono text-[11px] bg-ink text-[#7ee89a] px-2 py-0.5 rounded inline-flex items-center gap-1">
-                      {ev.hash.slice(0, 12)}…
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {rows.length === 0 && <div className="p-5 text-gray-400">No activity matches this filter.</div>}
+          {rows.map((ev, i) => (
+            <div
+              key={ev.id}
+              className={`px-5 py-3 flex items-start gap-4 ${i !== 0 ? "border-t border-hairline" : ""}`}
+            >
+              <span className="text-[11px] text-gray-400 tabular-nums w-14 shrink-0 pt-0.5">{ev.time}</span>
+              <span
+                className={`text-[11px] font-semibold w-28 shrink-0 pt-0.5 ${
+                  ev.agentName === "You" ? "text-orange" : "text-accent"
+                }`}
+              >
+                {ev.agentName}
+              </span>
+              <span className="text-[13px] text-gray-600 flex-1 pt-0.5">{ev.what}</span>
+              <span
+                className="badge whitespace-nowrap shrink-0"
+                style={{ background: `${resultColor[ev.type]}15`, color: resultColor[ev.type] }}
+              >
+                {ev.result}
+              </span>
+              <span className="font-mono text-[11px] bg-ink text-[#7ee89a] px-2 py-0.5 rounded shrink-0">
+                {ev.hash.slice(0, 12)}…
+              </span>
+            </div>
+          ))}
         </div>
       )}
 
       {!loading && viewMode === "grouped" && (
-        <div className="bg-white border border-border rounded-xl shadow-sm flex-1 overflow-y-auto divide-y divide-hairline">
-          {groups.length === 0 && <div className="p-5 text-gray-400">No activity matches this filter.</div>}
+        <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-0.5">
+          {groups.length === 0 && (
+            <div className="bg-white border border-border rounded-xl shadow-sm p-5 text-gray-400">
+              No activity matches this filter.
+            </div>
+          )}
           {orderedGroups.map((group) => {
             const isOpen = expandedAgents.has(group.agentName);
             const agent = agents.find((a) => a.name === group.agentName);
@@ -209,12 +193,15 @@ export default function AuditPage() {
             // — the relationship is still worth surfacing.
             const isChild = Boolean(parent);
             return (
-              <div key={group.agentName}>
+              <div
+                key={group.agentName}
+                className={`bg-white border border-border rounded-xl shadow-sm overflow-hidden ${
+                  isChild ? "ml-8" : ""
+                }`}
+              >
                 <button
                   onClick={() => toggleAgent(group.agentName)}
-                  className={`w-full flex items-center justify-between px-5 py-2.5 text-left hover:bg-zebra transition-colors ${
-                    isChild ? "pl-9" : ""
-                  }`}
+                  className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-zebra transition-colors"
                 >
                   <div className="flex items-center gap-2.5">
                     {isChild && <span className="text-lineageText text-[13px]">↳</span>}
@@ -244,43 +231,28 @@ export default function AuditPage() {
                   </div>
                 </button>
                 {isOpen && (
-                  <table className="w-full border-collapse table-fixed">
-                    <colgroup>
-                      <col style={{ width: 72 }} />
-                      <col />
-                      <col style={{ width: 160 }} />
-                      <col style={{ width: 155 }} />
-                    </colgroup>
-                    <thead>
-                      <tr className="bg-zebra eyebrow">
-                        <th className="text-left px-3.5 py-2">Time</th>
-                        <th className="text-left px-3.5 py-2">What happened</th>
-                        <th className="text-left px-3.5 py-2">Result</th>
-                        <th className="text-left px-3.5 py-2">Proof</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.events.map((ev, i) => (
-                        <tr key={ev.id} className={i % 2 ? "bg-zebra" : "bg-white"}>
-                          <td className="px-3.5 py-2 text-gray-400 whitespace-nowrap">{ev.time}</td>
-                          <td className="px-3.5 py-2 text-gray-600">{ev.what}</td>
-                          <td className="px-3.5 py-2">
-                            <span
-                              className="badge whitespace-nowrap"
-                              style={{ background: `${resultColor[ev.type]}15`, color: resultColor[ev.type] }}
-                            >
-                              {ev.result}
-                            </span>
-                          </td>
-                          <td className="px-3.5 py-2">
-                            <span className="font-mono text-[11px] bg-ink text-[#7ee89a] px-2 py-0.5 rounded inline-flex items-center gap-1">
-                              {ev.hash.slice(0, 12)}…
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="border-t border-hairline">
+                    {group.events.map((ev, i) => (
+                      <div
+                        key={ev.id}
+                        className={`px-5 py-2.5 flex items-start gap-4 ${i !== 0 ? "border-t border-hairline" : ""}`}
+                      >
+                        <span className="text-[11px] text-gray-400 tabular-nums w-14 shrink-0 pt-0.5">
+                          {ev.time}
+                        </span>
+                        <span className="text-[13px] text-gray-600 flex-1 pt-0.5">{ev.what}</span>
+                        <span
+                          className="badge whitespace-nowrap shrink-0"
+                          style={{ background: `${resultColor[ev.type]}15`, color: resultColor[ev.type] }}
+                        >
+                          {ev.result}
+                        </span>
+                        <span className="font-mono text-[11px] bg-ink text-[#7ee89a] px-2 py-0.5 rounded shrink-0">
+                          {ev.hash.slice(0, 12)}…
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             );

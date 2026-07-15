@@ -27,7 +27,7 @@ const config: Config = {
         lineage: "#9a8c98",
         lineageText: "#645c6e",
         rose: "#c9ada7",
-        green: "#6b8a6f",
+        green: "#3f7d52",
         orange: "#bb6d4a",
         red: "#a34a42",
         surface: "#f2e9e4",
