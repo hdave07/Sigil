@@ -60,27 +60,27 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="p-8 grid grid-cols-[1fr_380px] gap-6 items-start">
+    <div className="p-9 grid grid-cols-[1fr_380px] gap-6 items-start">
       <div>
-        <h1 className="text-xl font-semibold mb-1">Mission setup</h1>
-        <p className="text-gray-500 mb-6">
+        <h1 className="text-[26px] font-bold tracking-tight text-ink mb-1">Mission setup</h1>
+        <p className="text-[13px] text-gray-500 mb-7 max-w-lg leading-relaxed">
           Say what this agent is for, in plain language. Every action it attempts gets checked
           against this — anything that doesn&apos;t fit gets flagged and paused for your review.
         </p>
 
-        <form onSubmit={handleSubmit} className="bg-white border border-border rounded-lg p-6 flex flex-col gap-5">
+        <form onSubmit={handleSubmit} className="bg-white border border-border rounded-xl shadow-sm p-6 flex flex-col gap-5">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Agent name</label>
+            <label className="block eyebrow mb-1.5">Agent name</label>
             <input
               value={agentName}
               onChange={(e) => setAgentName(e.target.value)}
               placeholder="e.g. Pricing Agent"
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent/50"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+            <label className="block eyebrow mb-1.5">
               What is this agent for?
             </label>
             <textarea
@@ -88,7 +88,7 @@ export default function SetupPage() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="e.g. Research competitor pricing and draft a summary email"
               rows={3}
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent/50"
             />
             <p className="text-[11px] text-gray-400 mt-1">
               v0: a keyword lookup resolves this to the allowed actions below — not real NLP, but
@@ -98,7 +98,7 @@ export default function SetupPage() {
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-semibold text-gray-500">
+              <label className="eyebrow">
                 {editingScope ? "Allowed actions" : "Here's what we understood this agent can do"}
               </label>
               {editingScope ? (
@@ -141,7 +141,7 @@ export default function SetupPage() {
                   </span>
                 )}
                 {scope.map((key) => (
-                  <span key={key} className="badge bg-[#eef1ff] text-accent">
+                  <span key={key} className="badge bg-accent/10 text-accent">
                     {SCOPE_LABELS[key] ?? key}
                   </span>
                 ))}
@@ -152,14 +152,14 @@ export default function SetupPage() {
           <button
             type="submit"
             disabled={creating || !description.trim() || !agentName.trim()}
-            className="self-start px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50"
+            className="self-start px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50 shadow-[0_4px_16px_-4px_rgba(74,78,105,0.45)] hover:opacity-90 transition-opacity"
           >
             {creating ? "Declaring mission…" : "Declare mission & start agent"}
           </button>
         </form>
 
         {created && (
-          <div className="mt-5 bg-[#eafaf3] border border-[#c9f0dc] rounded-lg p-4 text-sm text-[#0f7a47]">
+          <div className="mt-5 bg-green/[0.07] border border-green/25 rounded-lg p-4 text-sm text-green">
             Mission stored · hash: {created.hash} — agent is now running. Check the{" "}
             <a href="/agents" className="underline font-medium">
               agent list
@@ -171,7 +171,7 @@ export default function SetupPage() {
 
       <div className="flex flex-col gap-4">
         <div>
-          <div className="text-xs font-semibold text-gray-500 mb-1.5">
+          <div className="eyebrow mb-1.5">
             Mission object (live preview)
           </div>
           <div className="bg-ink rounded-lg p-4 font-mono text-[11px] text-[#7ee89a] leading-relaxed whitespace-pre-wrap break-words">
@@ -187,20 +187,20 @@ export default function SetupPage() {
           </p>
         </div>
 
-        <div className="bg-white border border-border rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b border-[#e8e8ec] font-semibold text-sm">
+        <div className="bg-white border border-border rounded-xl shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-hairline font-semibold text-[13px] text-ink">
             Recently declared
           </div>
           {recentAgents.length === 0 && (
             <div className="px-4 py-4 text-[13px] text-gray-400">Nothing declared yet.</div>
           )}
           {[...recentAgents].reverse().map((a) => (
-            <div key={a.id} className="px-4 py-3 border-b border-[#f0f0f3] last:border-none">
-              <div className="text-accent text-[11px] font-medium mb-0.5">{a.name}</div>
-              <div className="text-[13px] mb-1.5">{a.missionDescription}</div>
+            <div key={a.id} className="px-4 py-3 border-b border-hairline last:border-none">
+              <div className="text-accent text-[11px] font-semibold mb-0.5">{a.name}</div>
+              <div className="text-[13px] text-gray-600 mb-1.5">{a.missionDescription}</div>
               <div className="flex flex-wrap gap-1">
                 {a.allowedActions.map((key) => (
-                  <span key={key} className="badge bg-[#eef1ff] text-accent">
+                  <span key={key} className="badge bg-accent/10 text-accent">
                     {SCOPE_LABELS[key] ?? key}
                   </span>
                 ))}

@@ -3,8 +3,11 @@
 @tailwind utilities;
 
 body {
-  background: #f4f4f6;
-  color: #111;
+  /* A quiet radial gradient instead of a flat fill — enough depth to feel
+     designed without calling attention to itself. */
+  background: radial-gradient(ellipse 1200px 800px at 15% -10%, #f8f3f0 0%, #f2e9e4 45%, #ece0da 100%) fixed;
+  color: #22223b;
+  letter-spacing: -0.006em;
 }
 
 .badge {
@@ -15,4 +18,12 @@ body {
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
+}
+
+.eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #9a8c98;
 }
