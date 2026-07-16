@@ -12,5 +12,5 @@ export default function Badge({
   color: "green" | "orange" | "red" | "blue";
   children: React.ReactNode;
 }) {
-  return <span className={`badge ${styles[color]}`}>{children}</span>;
+  return <span className={`badge whitespace-nowrap ${styles[color]}`}>{children}</span>;
 }

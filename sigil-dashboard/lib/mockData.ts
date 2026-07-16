@@ -26,8 +26,15 @@ export const agents: Agent[] = [
     name: "Draft Helper",
     missionId: "m1",
     missionDescription: "Drafting summary email",
-    status: "paused",
-    allowedActions: ["web_search"],
+    // Raw status stays "running" — the two pending actions below are what
+    // make this agent display as "Paused" (see the derived status in
+    // app/agents/page.tsx), not a status stored here.
+    status: "running",
+    // Has send_email in its allowed actions (unlike the other agents here) —
+    // this is what makes act1 below an off-mission case rather than a
+    // not-permitted one: the action itself is allowed, it just isn't this
+    // job.
+    allowedActions: ["web_search", "send_email"],
     currentJob: "Draft summary email",
     startedAt: "2h ago",
   },
@@ -50,10 +57,21 @@ export const agents: Agent[] = [
     name: "Update Agent",
     missionId: "m1",
     missionDescription: "Send weekly stakeholder update",
-    status: "paused",
+    status: "running",
     allowedActions: ["web_search"],
     currentJob: "Send stakeholder update",
     startedAt: "3h ago",
+  },
+  {
+    id: "a5",
+    name: "Summary Agent",
+    missionId: "m1",
+    missionDescription: "Finalize formatting on the summary report",
+    // Permanently stopped — the only other raw state besides "running".
+    status: "stopped",
+    allowedActions: ["write_file"],
+    currentJob: "Formatting summary report",
+    startedAt: "10m ago",
   },
 ];
 
@@ -67,8 +85,10 @@ export const actions: AgentAction[] = [
     inBounds: false,
     status: "pending",
     missionDescription: "Drafting summary email",
+    flagType: "off_mission",
+    permittedNote: "Sending email is within its permissions.",
     reason:
-      "This agent can only search the web — sending email was never part of the deal, so it stopped instead of guessing.",
+      "But off-mission — its job right now is drafting the summary, not sending it to customers. That's outside today's task, so it paused to check with you.",
     payload: {
       To: "stakeholder@company.com",
       Subject: "Q3 Competitor Pricing Summary",
@@ -85,8 +105,9 @@ export const actions: AgentAction[] = [
     inBounds: false,
     status: "pending",
     missionDescription: "Drafting summary email",
+    flagType: "not_permitted",
     reason:
-      "Same story — this agent can search the web, that's it. Posting to Slack isn't on that list, so it's checking with you first.",
+      "This agent can search the web and send email — that's it. Posting to Slack isn't on that list, so it's checking with you first.",
     payload: { Channel: "#team-updates", Message: "Draft ready for review — see attached." },
     requestedAt: "6 min ago",
   },
@@ -99,8 +120,9 @@ export const actions: AgentAction[] = [
     inBounds: false,
     status: "pending",
     missionDescription: "Sending weekly stakeholder update",
+    flagType: "not_permitted",
     reason:
-      "This agent's job is research and drafting, not hitting send. Mailing anyone wasn't part of its mission, so it's waiting on you.",
+      "This agent can only search the web — mailing anyone was never part of its allowed actions, so it's waiting on you.",
     payload: {
       To: "team@company.com",
       Subject: "Weekly Update — Week 24",
@@ -117,8 +139,9 @@ export const actions: AgentAction[] = [
     inBounds: false,
     status: "pending",
     missionDescription: "Compiling competitor pricing data",
+    flagType: "not_permitted",
     reason:
-      "This agent's mission only covers searching the web. Saving a file to disk isn't on that list, so it stopped and asked.",
+      "This agent's allowed actions only cover searching the web. Saving a file to disk isn't on that list, so it stopped and asked.",
     payload: { Path: "/reports/competitor-pricing-june.csv", Size: "42 KB" },
     requestedAt: "1h ago",
   },
@@ -131,8 +154,9 @@ export const actions: AgentAction[] = [
     inBounds: false,
     status: "pending",
     missionDescription: "Compiling competitor pricing data",
+    flagType: "not_permitted",
     reason:
-      "Its mission is scraping and compiling data, not sending mail. That's outside what it was told to do, so it paused here too.",
+      "This agent's allowed actions cover scraping and compiling data, not sending mail. That's outside what it's permitted to do, so it paused here too.",
     payload: { To: "you@company.com", Subject: "Competitor Pricing Report", Body: "Attached is the compiled report." },
     requestedAt: "50 min ago",
   },
@@ -176,6 +200,7 @@ export const auditLog: AuditEvent[] = [
     what: "Paused and notified via Slack and email to ask for permission",
     result: "Waiting for you",
     type: "paused",
+    flagType: "off_mission",
     hash: "e9a3d4f17b2c8e5a3f9d1b6c4e7a2f8d",
     prevHash: "f2b1c7e38d4a9f1b6e3c5a8d2f7b4e9c",
   },

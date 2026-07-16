@@ -5,13 +5,29 @@ import Link from "next/link";
 import { getAgents, getAuditLog, getMission, getPendingActions } from "@/lib/api";
 import { Agent, AgentAction, AuditEvent, AuditEventType, Mission } from "@/lib/types";
 import Badge from "@/components/Badge";
+import FlagTag from "@/components/FlagTag";
 
-const statusColor: Record<Agent["status"], "green" | "orange" | "red" | "blue"> = {
+type DisplayStatus = "running" | "paused" | "stopped";
+
+const statusColor: Record<DisplayStatus, "green" | "orange" | "red"> = {
   running: "green",
   paused: "orange",
-  waiting: "blue",
-  done: "red",
+  stopped: "red",
 };
+
+const statusLabel: Record<DisplayStatus, string> = {
+  running: "Running",
+  paused: "Paused",
+  stopped: "Stopped",
+};
+
+// "Paused" is never stored on an agent — it's whatever displays whenever the
+// agent has a decision waiting on it. Stopped is permanent and wins over
+// that; otherwise an agent is Paused if anything's pending, Running if not.
+function displayStatus(agent: Agent, pendingCount: number): DisplayStatus {
+  if (agent.status === "stopped") return "stopped";
+  return pendingCount > 0 ? "paused" : "running";
+}
 
 const resultColor: Record<AuditEventType, string> = {
   allowed: "#3f7d52",
@@ -81,14 +97,21 @@ export default function AgentsPage() {
     };
   }, [selected]);
 
-  const runningCount = agents.filter((a) => a.status === "running").length;
   const waitingAgentIds = new Set(pending.map((p) => p.agentId));
+  const pendingCountByAgent = new Map<string, number>();
+  for (const p of pending) {
+    pendingCountByAgent.set(p.agentId, (pendingCountByAgent.get(p.agentId) ?? 0) + 1);
+  }
+
+  const runningCount = agents.filter(
+    (a) => displayStatus(a, pendingCountByAgent.get(a.id) ?? 0) === "running"
+  ).length;
 
   const filteredAgents =
     filter === "all"
       ? agents
       : filter === "running"
-      ? agents.filter((a) => a.status === "running")
+      ? agents.filter((a) => displayStatus(a, pendingCountByAgent.get(a.id) ?? 0) === "running")
       : agents.filter((a) => waitingAgentIds.has(a.id));
 
   function toggleFilter(key: FilterKey) {
@@ -99,6 +122,7 @@ export default function AgentsPage() {
     filter === "running" ? "Running agents" : filter === "waiting" ? "Agents waiting for your decision" : "Active agents";
 
   const selectedPending = selected ? pending.filter((p) => p.agentId === selected.id) : [];
+  const selectedStatus: DisplayStatus = selected ? displayStatus(selected, selectedPending.length) : "running";
   const selectedAudit = selected ? auditLog.filter((e) => e.agentName === selected.name) : [];
   const parentAgent = selected?.parentAgentId ? agents.find((a) => a.id === selected.parentAgentId) : undefined;
   const childAgents = selected ? agents.filter((a) => a.parentAgentId === selected.id) : [];
@@ -137,10 +161,10 @@ export default function AgentsPage() {
         />
         <StatCard
           label="Waiting for your decision"
-          value={pending.length}
+          value={waitingAgentIds.size}
           color="text-orange"
           active={filter === "waiting"}
-          emphasize={pending.length > 0}
+          emphasize={waitingAgentIds.size > 0}
           onClick={() => toggleFilter("waiting")}
         />
       </div>
@@ -188,6 +212,7 @@ export default function AgentsPage() {
               {orderedAgents.map((a) => {
                 const parent = a.parentAgentId ? agents.find((p) => p.id === a.parentAgentId) : undefined;
                 const isNestedChild = Boolean(parent) && filteredAgents.some((f) => f.id === parent!.id);
+                const aStatus = displayStatus(a, pendingCountByAgent.get(a.id) ?? 0);
                 return (
                   <tr
                     key={a.id}
@@ -216,7 +241,7 @@ export default function AgentsPage() {
                     <td className="px-4 py-2.5 text-gray-500">{a.currentJob}</td>
                     <td className="px-4 py-2.5 text-gray-400 text-[12px]">{a.allowedActions.join(", ")}</td>
                     <td className="px-4 py-2.5">
-                      <Badge color={statusColor[a.status]}>{a.status}</Badge>
+                      <Badge color={statusColor[aStatus]}>{statusLabel[aStatus]}</Badge>
                     </td>
                     <td className="px-4 py-2.5 text-gray-400 text-[12px]">{a.startedAt}</td>
                   </tr>
@@ -241,7 +266,7 @@ export default function AgentsPage() {
                     {selected.currentJob} · started {selected.startedAt}
                   </div>
                 </div>
-                <Badge color={statusColor[selected.status]}>{selected.status}</Badge>
+                <Badge color={statusColor[selectedStatus]}>{statusLabel[selectedStatus]}</Badge>
               </div>
 
               <div className="p-5">
@@ -262,6 +287,11 @@ export default function AgentsPage() {
                         </Link>
                       </div>
                     ))}
+                    {selected.status === "running" && (
+                      <div className="text-[11px] text-gray-500 mt-2.5 pt-2.5 border-t border-orange/20">
+                        Meanwhile, still running: {selected.currentJob}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -331,11 +361,14 @@ export default function AgentsPage() {
                       <div key={ev.id} className="text-[11px] border-b border-hairline last:border-none pb-1.5">
                         <div className="flex items-center justify-between gap-2 mb-0.5">
                           <span className="text-gray-400">{ev.time}</span>
-                          <span
-                            className="badge whitespace-nowrap text-[10px]"
-                            style={{ background: `${resultColor[ev.type]}15`, color: resultColor[ev.type] }}
-                          >
-                            {ev.result}
+                          <span className="flex items-center gap-1">
+                            <span
+                              className="badge whitespace-nowrap text-[10px]"
+                              style={{ background: `${resultColor[ev.type]}15`, color: resultColor[ev.type] }}
+                            >
+                              {ev.result}
+                            </span>
+                            <FlagTag flagType={ev.flagType} />
                           </span>
                         </div>
                         <div className="text-gray-600">{ev.what}</div>
