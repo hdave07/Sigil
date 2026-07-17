@@ -1,7 +1,7 @@
 # SIGIL — Shared Contract
 
 **Last updated:** 2026-07-16
-**Owner:** HD (backend/protocol). Handoff reference for Lucy (frontend) and for future Claude Code sessions on this repo.
+**Owner:** HD (backend/protocol). Handoff reference for LK (frontend) and for future Claude Code sessions on this repo.
 
 ## 1. Purpose & status
 
