@@ -36,6 +36,19 @@ async function sha256(input: string): Promise<ArrayBuffer> {
   return crypto.subtle.digest("SHA-256", utf8(input));
 }
 
+function toHex(bytes: ArrayBuffer): string {
+  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Generic SHA-256 hex digest — for mission/audit hashing, NOT request
+ * signing. Distinct from contentDigest below, which is base64 and specific
+ * to the RFC 9530 Content-Digest header.
+ */
+export async function sha256Hex(input: string): Promise<string> {
+  return toHex(await sha256(input));
+}
+
 // ---- content-digest (RFC 9530) -------------------------------------------
 
 /** Build the `Content-Digest` header value for a body: `sha-256=:<base64>:` */

@@ -49,6 +49,22 @@ export type Decision = "pending" | "approved" | "denied";
 /** Result the middleware returns from POST /action. */
 export type ActionVerdict = "allow" | "pause" | "deny";
 
+/**
+ * Why an action was flagged instead of auto-allowed. See mission.ts's
+ * checkAction for the two-phase logic that produces this:
+ *   "not_permitted"  - action.type isn't declared anywhere in this mission's
+ *                      scope (neither allow nor requireApproval).
+ *   "needs_approval" - action.type IS in requireApproval: a sensitivity rule
+ *                      that applies the same way regardless of mission
+ *                      ("email.send always needs a human nod").
+ *   "off_mission"    - action.type IS in allow (fully permitted), but this
+ *                      specific action's target/detail doesn't serve what
+ *                      THIS mission is trying to accomplish. The only one of
+ *                      the three that's an instance-level judgment, not a
+ *                      type-level lookup.
+ */
+export type FlagType = "not_permitted" | "needs_approval" | "off_mission";
+
 // ---- agent ----------------------------------------------------------------
 
 export interface Agent {
@@ -86,15 +102,20 @@ export interface Mission {
 }
 
 /**
- * Deterministic enforcement rule set. An action's `type` is looked up here:
- *   in `allow`           -> allow
- *   in `requireApproval` -> pause (wait for a human)
- *   anything else        -> deny  (default-deny)
+ * Two-phase deterministic check, run in this order by mission.ts's checkAction:
+ *   1. Type lookup: type in `requireApproval` -> "needs_approval" (pause);
+ *      type not in `allow` at all -> "not_permitted" (pause); else continue.
+ *   2. Content check (only reached if type was in `allow`): case-insensitive
+ *      substring match of `offMissionKeywords` against the action's
+ *      target+detail. A hit -> "off_mission" (pause). No hit -> allow.
+ * Nothing here auto-produces verdict "deny" in v0 - every flagged case
+ * pauses for a human (AAuth's human-in-the-loop principle). `deny` stays
+ * valid on ActionVerdict for future use (e.g. an explicit blocklist).
  */
 export interface MissionScope {
   allow: string[]; // action types permitted outright, e.g. "web.read"
-  requireApproval: string[]; // action types that pause, e.g. "email.send"
-  // everything not listed is denied by default
+  requireApproval: string[]; // action types that always pause, e.g. "email.send"
+  offMissionKeywords: string[]; // trip words checked against an allowed action's target+detail
 }
 
 // ---- actions --------------------------------------------------------------
@@ -113,6 +134,8 @@ export interface ActionOutcome {
   actionId: string;
   verdict: ActionVerdict;
   reason: string;
+  /** present iff verdict !== "allow" */
+  flagType?: FlagType;
   /** present when verdict === "pause": the id the agent polls at /action/:id/status */
   statusId?: string;
 }
@@ -126,6 +149,8 @@ export interface PendingApproval {
   actionAttempted: string;
   reason: string;
   context: string;
+  /** always present - a PendingApproval only exists because something paused */
+  flagType: FlagType;
   timestamp: string;
 }
 
@@ -136,13 +161,24 @@ export interface PendingApproval {
  * so any edit to a past entry breaks the chain from that point onward.
  *   hash = SHA-256( canonical(id, agentId, event, detail, timestamp, previousHash) )
  * The first entry uses previousHash = "GENESIS".
+ *
+ * `event` is the specific, extensible name ("mission.declared",
+ * "action.allowed", "action.paused", "action.approved", "action.denied",
+ * "agent.registered", ...). `type` is the coarse category the dashboard
+ * groups/colors by - omitted for lifecycle-only events (mission.declared,
+ * agent.registered) that aren't themselves an enforcement verdict.
  */
 export interface AuditEntry {
   id: string;
   agentId: string;
-  event: string; // "mission.declared" | "action.allowed" | "action.paused" | ...
+  event: string;
+  type?: AuditEventType;
   detail: string;
+  flagType?: FlagType;
   timestamp: string;
   hash: string;
   previousHash: string;
 }
+
+/** Coarse category for the dashboard's audit-timeline coloring/filtering. */
+export type AuditEventType = "allowed" | "blocked" | "paused" | "human";
