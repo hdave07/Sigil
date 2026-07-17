@@ -129,6 +129,7 @@ export async function decideAction(
       what: `Resumed after your approval — executing: ${action.label}`,
       result: "Resumed",
       type: "human",
+      flagType: action.flagType,
     });
   } else if (decision === "deny") {
     pushAudit({
@@ -136,14 +137,16 @@ export async function decideAction(
       what: `You denied: ${action.label}`,
       result: "Denied — agent continues without this action",
       type: "human",
+      flagType: action.flagType,
     });
   } else {
-    _agents = _agents.map((ag) => (ag.name === action.agentName ? { ...ag, status: "done" } : ag));
+    _agents = _agents.map((ag) => (ag.name === action.agentName ? { ...ag, status: "stopped" } : ag));
     pushAudit({
       agentName: action.agentName,
       what: `You stopped the agent`,
       result: "Agent shut down",
       type: "human",
+      flagType: action.flagType,
     });
   }
   return action;

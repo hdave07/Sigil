@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getAgents, getAuditLog } from "@/lib/api";
-import { Agent, AuditEvent, AuditEventType } from "@/lib/types";
+import { Agent, AuditEvent, AuditEventType, FlagType } from "@/lib/types";
+import FlagTag from "@/components/FlagTag";
 
 const resultColor: Record<AuditEventType, string> = {
   allowed: "#3f7d52",
@@ -19,12 +20,23 @@ const filters: { key: AuditEventType | "all"; label: string }[] = [
   { key: "human", label: "Your decisions" },
 ];
 
+// A second, independent axis from the outcome filters above: not "what
+// happened" but "was this ever flagged, and why." It's tracked separately so
+// an off-mission action that later gets approved is still findable here —
+// the outcome filters alone would show it as a plain "Allowed" row.
+const flagFilters: { key: FlagType | "all"; label: string }[] = [
+  { key: "all", label: "Any origin" },
+  { key: "off_mission", label: "Off-mission" },
+  { key: "not_permitted", label: "Not permitted" },
+];
+
 type ViewMode = "grouped" | "flat";
 
 export default function AuditPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [filter, setFilter] = useState<AuditEventType | "all">("all");
+  const [flagFilter, setFlagFilter] = useState<FlagType | "all">("all");
   const [viewMode, setViewMode] = useState<ViewMode>("grouped");
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -50,7 +62,9 @@ export default function AuditPage() {
     });
   }
 
-  const rows = filter === "all" ? events : events.filter((e) => e.type === filter);
+  const rows = events.filter(
+    (e) => (filter === "all" || e.type === filter) && (flagFilter === "all" || e.flagType === flagFilter)
+  );
 
   const groups: { agentName: string; events: AuditEvent[]; lastIndex: number }[] = [];
   rows.forEach((ev, i) => {
@@ -105,7 +119,7 @@ export default function AuditPage() {
         </span>
       </div>
 
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-5">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
         <div className="flex gap-1.5 flex-wrap">
           {filters.map((f) => (
             <button
@@ -140,6 +154,23 @@ export default function AuditPage() {
         </div>
       </div>
 
+      <div className="flex items-center gap-1.5 flex-wrap mb-5">
+        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mr-0.5">
+          Flagged as
+        </span>
+        {flagFilters.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setFlagFilter(f.key)}
+            className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors ${
+              flagFilter === f.key ? "bg-accent text-white font-semibold" : "text-gray-500 hover:bg-gray-50"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {loading && (
         <div className="bg-white border border-border rounded-xl shadow-sm flex-1 flex items-center justify-center text-gray-400">
           Loading…
@@ -169,6 +200,7 @@ export default function AuditPage() {
               >
                 {ev.result}
               </span>
+              <FlagTag flagType={ev.flagType} />
               <span className="font-mono text-[11px] bg-ink text-[#7ee89a] px-2 py-0.5 rounded shrink-0">
                 {ev.hash.slice(0, 12)}…
               </span>
@@ -247,6 +279,7 @@ export default function AuditPage() {
                         >
                           {ev.result}
                         </span>
+                        <FlagTag flagType={ev.flagType} />
                         <span className="font-mono text-[11px] bg-ink text-[#7ee89a] px-2 py-0.5 rounded shrink-0">
                           {ev.hash.slice(0, 12)}…
                         </span>

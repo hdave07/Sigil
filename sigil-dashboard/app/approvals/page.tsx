@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { decideAction, getAgents, getPendingActions } from "@/lib/api";
 import { Agent, AgentAction } from "@/lib/types";
+import FlagTag from "@/components/FlagTag";
 
 function ApprovalsContent() {
   const searchParams = useSearchParams();
@@ -139,7 +140,10 @@ function ApprovalsContent() {
                         : "hover:bg-zebra"
                     }`}
                   >
-                    <div className="text-sm font-semibold text-ink mb-1">{item.label}</div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="text-sm font-semibold text-ink">{item.label}</div>
+                      <FlagTag flagType={item.flagType} />
+                    </div>
                     <div className="text-[12px] text-orange leading-snug mb-1.5">{item.reason}</div>
                     <div className="text-[10px] text-gray-400">{item.requestedAt}</div>
                   </div>
@@ -157,13 +161,14 @@ function ApprovalsContent() {
           )}
           {selected && (
             <div>
-              <div className="px-5 py-3.5 border-b border-orange/20 bg-orange/[0.07] flex gap-3">
+              <div className="px-5 py-3.5 border-b border-orange/20 bg-orange/[0.07] flex items-start justify-between gap-3">
                 <div>
                   <div className="font-bold text-ink">Your agent has paused and is waiting for you</div>
                   <div className="text-xs text-gray-500">
                     {selected.agentName} · {selected.requestedAt}
                   </div>
                 </div>
+                <FlagTag flagType={selected.flagType} />
               </div>
               <div className="p-5">
                 <div className="bg-zebra border border-hairline rounded-lg p-3.5 mb-4">
@@ -177,12 +182,35 @@ function ApprovalsContent() {
                   </div>
                 </div>
 
-                <div className="bg-orange/[0.07] border border-orange/30 rounded-lg p-4 mb-4 shadow-[0_2px_14px_-6px_rgba(187,109,74,0.3)]">
-                  <div className="text-[12px] font-bold text-orange uppercase tracking-wide mb-1.5">
-                    Why was it flagged?
+                {selected.flagType === "off_mission" ? (
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-green/[0.07] border border-green/30 rounded-lg p-3.5">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-green uppercase tracking-wide mb-1.5">
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green text-white text-[10px] leading-none shrink-0">
+                          ✓
+                        </span>
+                        Allowed
+                      </div>
+                      <div className="text-[13px] text-ink leading-relaxed">{selected.permittedNote}</div>
+                    </div>
+                    <div className="bg-red/[0.07] border border-red/30 rounded-lg p-3.5">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-red uppercase tracking-wide mb-1.5">
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red text-white text-[10px] leading-none shrink-0">
+                          ✕
+                        </span>
+                        But off-mission
+                      </div>
+                      <div className="text-[13px] text-ink leading-relaxed">{selected.reason}</div>
+                    </div>
                   </div>
-                  <div className="text-[14px] text-ink leading-relaxed">{selected.reason}</div>
-                </div>
+                ) : (
+                  <div className="bg-orange/[0.07] border border-orange/30 rounded-lg p-4 mb-4 shadow-[0_2px_14px_-6px_rgba(187,109,74,0.3)]">
+                    <div className="text-[12px] font-bold text-orange uppercase tracking-wide mb-1.5">
+                      Why was it flagged?
+                    </div>
+                    <div className="text-[14px] text-ink leading-relaxed">{selected.reason}</div>
+                  </div>
+                )}
 
                 {selected.payload && (
                   <div className="bg-ink rounded-lg p-4 mb-4 font-mono text-[11px] text-[#7ee89a] leading-relaxed">
