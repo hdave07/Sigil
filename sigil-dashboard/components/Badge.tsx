@@ -3,13 +3,14 @@ const styles: Record<string, string> = {
   orange: "bg-orange/15 text-orange",
   red: "bg-red/12 text-red",
   blue: "bg-accent/10 text-accent",
+  gray: "bg-gray-100 text-gray-500",
 };
 
 export default function Badge({
   color,
   children,
 }: {
-  color: "green" | "orange" | "red" | "blue";
+  color: "green" | "orange" | "red" | "blue" | "gray";
   children: React.ReactNode;
 }) {
   return <span className={`badge whitespace-nowrap ${styles[color]}`}>{children}</span>;

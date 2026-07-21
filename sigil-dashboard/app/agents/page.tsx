@@ -3,30 +3,40 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getAgents, getAuditLog, getMission, getPendingActions } from "@/lib/api";
-import { Agent, AgentAction, AuditEvent, AuditEventType, Mission } from "@/lib/types";
+import { Agent, AgentAction, AgentStatus, AuditEvent, AuditEventType, Mission } from "@/lib/types";
 import Badge from "@/components/Badge";
 import FlagTag from "@/components/FlagTag";
 
-type DisplayStatus = "running" | "paused" | "stopped";
-
-const statusColor: Record<DisplayStatus, "green" | "orange" | "red"> = {
+const statusColor: Record<AgentStatus, "green" | "orange" | "red" | "gray"> = {
+  idle: "gray",
   running: "green",
   paused: "orange",
+  waiting: "orange",
+  completed: "gray",
   stopped: "red",
 };
 
-const statusLabel: Record<DisplayStatus, string> = {
+const statusLabel: Record<AgentStatus, string> = {
+  idle: "Idle",
   running: "Running",
   paused: "Paused",
+  waiting: "Waiting",
+  completed: "Completed",
   stopped: "Stopped",
 };
 
-// "Paused" is never stored on an agent — it's whatever displays whenever the
-// agent has a decision waiting on it. Stopped is permanent and wins over
-// that; otherwise an agent is Paused if anything's pending, Running if not.
-function displayStatus(agent: Agent, pendingCount: number): DisplayStatus {
-  if (agent.status === "stopped") return "stopped";
-  return pendingCount > 0 ? "paused" : "running";
+// TODO: once the real backend is live, confirm whether we should trust
+// agent.status directly instead of deriving "paused" client-side here — the
+// backend already tracks "paused" (and "waiting") as real states, and we
+// haven't confirmed whether their semantics match what we derive below from
+// pending-approval count. Until then, this keeps our existing derivation and
+// just passes through any other backend value unchanged.
+//
+// Terminal states ("stopped", "completed") always win. Otherwise an agent
+// displays as "paused" if anything's pending, or its raw status if not.
+function displayStatus(agent: Agent, pendingCount: number): AgentStatus {
+  if (agent.status === "stopped" || agent.status === "completed") return agent.status;
+  return pendingCount > 0 ? "paused" : agent.status;
 }
 
 const resultColor: Record<AuditEventType, string> = {
@@ -122,7 +132,7 @@ export default function AgentsPage() {
     filter === "running" ? "Running agents" : filter === "waiting" ? "Agents waiting for your decision" : "Active agents";
 
   const selectedPending = selected ? pending.filter((p) => p.agentId === selected.id) : [];
-  const selectedStatus: DisplayStatus = selected ? displayStatus(selected, selectedPending.length) : "running";
+  const selectedStatus: AgentStatus = selected ? displayStatus(selected, selectedPending.length) : "running";
   const selectedAudit = selected ? auditLog.filter((e) => e.agentName === selected.name) : [];
   const parentAgent = selected?.parentAgentId ? agents.find((a) => a.id === selected.parentAgentId) : undefined;
   const childAgents = selected ? agents.filter((a) => a.parentAgentId === selected.id) : [];
