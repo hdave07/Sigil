@@ -3,9 +3,8 @@
 //
 // EVERY function here matches one endpoint on HD's real middleware:
 //   getMission        -> GET  /mission
-//   createMission     -> POST /
 //   getAgents         -> GET  /agents
-//   createAgent       -> POST /agent
+//   setAgentMission   -> POST /agents/:id/mission
 //   getPendingActions -> GET  /pending
 //   getAuditLog       -> GET  /audit
 //   getActionStatus   -> GET  /action/:id/status
@@ -17,17 +16,15 @@
 // component should need to change — only this file.
 
 import { Agent, AgentAction, ActionStatus, AuditEvent, AuditEventType, FlagType, Mission } from "./types";
-import { agents as seedAgents, actions as seedActions, auditLog as seedAuditLog, missions as seedMissions } from "./mockData";
+import { actions as seedActions, missions as seedMissions } from "./mockData";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? ""; // set in .env.local - see README
 
 // In-memory mutable store standing in for the database during frontend dev.
-// Still used by createMission/createAgent/getMission/getActionStatus below,
-// which stay mock for now - see the comment on each for why.
+// Still used by getMission/getActionStatus below, which stay mock for now -
+// see the comment on each for why.
 let _missions: Mission[] = [...seedMissions];
-let _agents: Agent[] = [...seedAgents];
 let _actions: AgentAction[] = [...seedActions];
-let _audit: AuditEvent[] = [...seedAuditLog];
 
 const delay = (ms = 300) => new Promise((res) => setTimeout(res, ms));
 
@@ -68,49 +65,10 @@ function toAuditEventType(backendType: string | undefined): AuditEventType {
   return (backendType as AuditEventType) ?? "allowed";
 }
 
-function nextHash() {
-  return Math.random().toString(16).slice(2, 18).padEnd(16, "0");
-}
-
-function pushAudit(entry: Omit<AuditEvent, "id" | "hash" | "prevHash" | "time">) {
-  const prevHash = _audit.length ? _audit[_audit.length - 1].hash : "0000000000000000";
-  const now = new Date();
-  const time = `${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, "0")} ${now.getHours() >= 12 ? "PM" : "AM"}`;
-  const event: AuditEvent = {
-    id: `e${_audit.length + 1}`,
-    time,
-    hash: nextHash(),
-    prevHash,
-    ...entry,
-  };
-  _audit = [..._audit, event];
-  return event;
-}
-
 // GET /mission
 export async function getMission(missionId?: string): Promise<Mission | undefined> {
   await delay();
   return missionId ? _missions.find((m) => m.id === missionId) : _missions[0];
-}
-
-// POST /  (declare a mission)
-export async function createMission(description: string, scope: string[]): Promise<Mission> {
-  await delay();
-  const mission: Mission = {
-    id: `m${_missions.length + 1}`,
-    description,
-    scope,
-    hash: Math.random().toString(16).slice(2, 18),
-    createdAt: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-  };
-  _missions = [..._missions, mission];
-  pushAudit({
-    agentName: "System",
-    what: `Mission declared: "${description}"`,
-    result: "Mission stored",
-    type: "allowed",
-  });
-  return mission;
 }
 
 // GET /agents (real - wired to the backend)
@@ -138,22 +96,43 @@ export async function getAgents(): Promise<Agent[]> {
   }));
 }
 
-// POST /agent
-export async function createAgent(agent: Omit<Agent, "id" | "startedAt">): Promise<Agent> {
-  await delay();
-  const newAgent: Agent = {
-    ...agent,
-    id: `a${_agents.length + 1}`,
-    startedAt: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-  };
-  _agents = [..._agents, newAgent];
-  pushAudit({
-    agentName: newAgent.name,
-    what: `Agent identity created, key pair generated`,
-    result: "Started",
-    type: "allowed",
+// The structured allowlist a mission resolves to - mirrors MissionScope in
+// sigil-backend/packages/middleware/src/contract.ts exactly (see
+// docs/CONTRACT.md §3/§6 for the enforcement semantics this feeds).
+export interface MissionScope {
+  allow: string[];
+  requireApproval: string[];
+  offMissionKeywords: string[];
+}
+
+export interface AgentMission {
+  id: string;
+  agentId: string;
+  text: string;
+  scope: MissionScope;
+  hash: string;
+  createdAt: string;
+}
+
+// POST /agents/:id/mission (real - wired to the backend) - the dashboard's
+// checklist path: a human sets an existing agent's mission directly, rather
+// than the agent declaring its own. Unsigned, same as every other
+// dashboard-facing route today (see CONTRACT.md §2).
+export async function setAgentMission(
+  agentId: string,
+  text: string,
+  scope: MissionScope
+): Promise<AgentMission> {
+  const res = await fetch(`${API_BASE}/agents/${agentId}/mission`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, scope }),
   });
-  return newAgent;
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}) as { error?: string });
+    throw new Error(body.error ?? `failed to set mission (${res.status})`);
+  }
+  return res.json();
 }
 
 // GET /pending (real - wired to the backend)
