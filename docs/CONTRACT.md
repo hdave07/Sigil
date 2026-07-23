@@ -1,6 +1,6 @@
 # SIGIL — Shared Contract
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-07-21
 **Owner:** HD (backend/protocol). Handoff reference for LK (frontend) and for future Claude Code sessions on this repo.
 
 ## 1. Purpose & status
@@ -115,7 +115,8 @@ export interface ActionOutcome {
 
 export interface PendingApproval {
   id: string;
-  agentName: string;
+  agentId: string; // for lookups - names aren't guaranteed unique
+  agentName: string; // for display
   mission: string;
   actionAttempted: string;
   reason: string;
@@ -177,3 +178,4 @@ Nothing in this check ever auto-produces `verdict: "deny"` in v0 — every flagg
 ## 8. Changelog
 
 - **2026-07-16** — Added `FlagType` (3-valued: `not_permitted`/`needs_approval`/`off_mission`) to `ActionOutcome`, `PendingApproval`, `AuditEntry`. Added `MissionScope.offMissionKeywords`. Added `AuditEntry.type` (optional). Corrected `MissionScope`'s doc comment (was "denied by default," is actually "paused by default, flagged by reason"). Built `mission.ts` (`declareMission`, `checkAction`) and `scripts/mission-demo.ts`. Added `sha256Hex` to `aauth-core/src/signing.ts`.
+- **2026-07-21** — Added `PendingApproval.agentId` (requested by LK) — `agentName` alone isn't a safe lookup key since names aren't guaranteed unique; both fields are now present (`agentId` for lookups, `agentName` for display). Built `audit.ts` (hash-chained log) and `actions.ts` (pause/approve/resume state machine) for Days 6-8. Began Days 9-10: added `hono`/`@hono/node-server` deps, first server entrypoint (`scripts/server.ts`).

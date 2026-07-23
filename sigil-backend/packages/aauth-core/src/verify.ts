@@ -70,6 +70,17 @@ function parseSignatureInput(header: string): ParsedInput | null {
   };
 }
 
+/**
+ * Read just the keyid out of a Signature-Input header, without verifying
+ * anything. Needed at the HTTP layer: to verify a request you first have
+ * to know WHICH agent's public key to check it against, and that agent id
+ * is embedded inside this header - so it has to be readable before
+ * verifyRequest (which already requires the public key up front) can run.
+ */
+export function peekKeyid(signatureInputHeader: string): string | null {
+  return parseSignatureInput(signatureInputHeader)?.keyid ?? null;
+}
+
 function parseSignature(header: string, label: string): Uint8Array<ArrayBuffer> | null {
   // format: <label>=:<base64>:
   const prefix = `${label}=:`;

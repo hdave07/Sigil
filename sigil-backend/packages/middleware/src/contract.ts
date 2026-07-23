@@ -144,7 +144,8 @@ export interface ActionOutcome {
 
 export interface PendingApproval {
   id: string;
-  agentName: string;
+  agentId: string; // for lookups - names aren't guaranteed unique
+  agentName: string; // for display
   mission: string;
   actionAttempted: string;
   reason: string;
