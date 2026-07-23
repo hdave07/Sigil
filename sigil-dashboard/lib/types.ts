@@ -2,10 +2,14 @@
 // These mirror the endpoint contract in the build brief (Part 4) so swapping
 // the mock API in lib/api.ts for HD's real endpoints is a drop-in change.
 
-// Only two raw process states are ever stored. "Paused" is not one of them —
-// it's derived (see app/agents/page.tsx) from whether the agent has a
-// pending action waiting on a decision.
-export type AgentStatus = "running" | "stopped";
+// The backend's contract (docs/CONTRACT.md) defines AgentStatus as "idle" |
+// "running" | "paused" | "waiting" | "completed" — "paused" is a real stored
+// value on their side, not derived. We keep "stopped" alongside it for now
+// since lib/mockData.ts and lib/api.ts still set that value directly; once
+// the real backend is live we should confirm whether "stopped" maps to
+// "completed" or should go away entirely. See the TODO on displayStatus()
+// in app/agents/page.tsx for the "paused" derivation this affects.
+export type AgentStatus = "idle" | "running" | "paused" | "waiting" | "completed" | "stopped";
 export type ActionStatus = "pending" | "approved" | "denied";
 export type AuditEventType = "allowed" | "blocked" | "paused" | "human";
 // Why a paused/flagged action is waiting on a human:
