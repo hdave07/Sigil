@@ -157,6 +157,24 @@ app.get("/mission", verifySignedRequest, (c) => {
   return c.json(mission);
 });
 
+/**
+ * GET /agents/:id/mission - dashboard reads an agent's current mission,
+ * including its full scope (allow/requireApproval/offMissionKeywords).
+ * NOT signed - read counterpart of POST /agents/:id/mission, same
+ * unsigned/dashboard-facing model. AgentSummary (from GET /agents) is
+ * deliberately compact and doesn't carry scope - this is where the full
+ * detail lives for a UI that needs it.
+ */
+app.get("/agents/:id/mission", (c) => {
+  const agentId = c.req.param("id");
+  if (!agentId) return c.json({ error: "missing agent id" }, 400);
+  if (!agents.get(agentId)) return c.json({ error: "unknown agent id" }, 404);
+
+  const mission = missions.getForAgent(agentId);
+  if (!mission) return c.json({ error: "no mission declared for this agent" }, 404);
+  return c.json(mission);
+});
+
 /** POST /action (signed) - attempt an action, checked against the agent's current mission. */
 app.post("/action", verifySignedRequest, async (c) => {
   const agentId = c.get("agentId");
