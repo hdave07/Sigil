@@ -78,6 +78,21 @@ async function verifySignedRequest(c: Context<{ Variables: Variables }>, next: N
 app.get("/", (c) => c.text("Sigil middleware is alive"));
 
 /**
+ * Shared by both ways a mission can be declared (agent self-declares, or
+ * the dashboard sets one directly) - one place that calls missions.declare()
+ * and writes the audit entry, so neither path can forget to log it.
+ */
+async function declareMissionForAgent(agentId: string, text: string, scope: MissionScope) {
+  const mission = await missions.declare({ agentId, text, scope });
+  await auditLog.append({
+    agentId,
+    event: "mission.declared",
+    detail: `mission declared: "${mission.text}"`,
+  });
+  return mission;
+}
+
+/**
  * POST /agent - register an agent + its public key.
  * Deliberately NOT signature-verified: this is the call that establishes
  * an agent's identity in the first place, so there's no key on file yet
@@ -100,7 +115,7 @@ app.post("/agent", async (c) => {
   return c.json({ agentId: agent.id });
 });
 
-/** POST /mission (signed) - declare a mission for the verified agent. */
+/** POST /mission (signed) - agent declares its own mission. */
 app.post("/mission", verifySignedRequest, async (c) => {
   const agentId = c.get("agentId");
   const body = await c.req.json<{ text?: string; scope?: MissionScope }>();
@@ -108,14 +123,30 @@ app.post("/mission", verifySignedRequest, async (c) => {
     return c.json({ error: "text and scope are required" }, 400);
   }
 
-  const mission = await missions.declare({ agentId, text: body.text, scope: body.scope });
+  const mission = await declareMissionForAgent(agentId, body.text, body.scope);
+  return c.json(mission);
+});
 
-  await auditLog.append({
-    agentId,
-    event: "mission.declared",
-    detail: `mission declared: "${mission.text}"`,
-  });
+/**
+ * POST /agents/:id/mission - the dashboard sets a mission for an agent
+ * directly (the "business owner configures what this agent is for" path).
+ * Deliberately NOT signature-verified: this is a human at the dashboard,
+ * not an agent proving its own identity. No auth exists on this route yet -
+ * same as every other dashboard-facing route today (approve/deny has none
+ * either), a known, already-accepted limitation for this demo, not a new
+ * regression introduced here.
+ */
+app.post("/agents/:id/mission", async (c) => {
+  const agentId = c.req.param("id");
+  if (!agentId) return c.json({ error: "missing agent id" }, 400);
+  if (!agents.get(agentId)) return c.json({ error: "unknown agent id" }, 404);
 
+  const body = await c.req.json<{ text?: string; scope?: MissionScope }>();
+  if (!body.text || !body.scope) {
+    return c.json({ error: "text and scope are required" }, 400);
+  }
+
+  const mission = await declareMissionForAgent(agentId, body.text, body.scope);
   return c.json(mission);
 });
 
