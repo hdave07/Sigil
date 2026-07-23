@@ -27,10 +27,11 @@
 //   GET  /audit               the audit timeline                          -> AuditEntry[]
 //   POST /action/:id/status   human decision on a pending action          -> { status: Decision }
 //   POST /agents/:id/mission  human sets an agent's mission directly       -> Mission
-//   (NOT signed - a human at the dashboard, not an agent proving its own
-//   identity. No auth on this route yet, same as POST /action/:id/status -
-//   a known, already-accepted gap for this demo stage, not unique to this
-//   endpoint.)
+//   GET  /agents/:id/mission  human reads an agent's mission incl. scope   -> Mission
+//   (Neither signed - a human at the dashboard, not an agent proving its own
+//   identity. No auth on these routes yet, same as POST /action/:id/status -
+//   a known, already-accepted gap for this demo stage, not unique to these
+//   endpoints.)
 //
 //   POST /audit               *** see note ***
 //   The audit log is tamper-evident ONLY if entries are written solely by the
