@@ -71,31 +71,6 @@ export async function getMission(missionId?: string): Promise<Mission | undefine
   return missionId ? _missions.find((m) => m.id === missionId) : _missions[0];
 }
 
-// GET /agents (real - wired to the backend)
-export async function getAgents(): Promise<Agent[]> {
-  const res = await fetch(`${API_BASE}/agents`);
-  const summaries = (await res.json()) as { id: string; name: string; status: string; mission: string | null }[];
-
-  return summaries.map((a) => ({
-    id: a.id,
-    name: a.name,
-    // AgentSummary doesn't expose the mission's own id, only its text - not
-    // read anywhere in the UI today, so a placeholder is harmless for now.
-    missionId: "",
-    missionDescription: a.mission ?? "",
-    status: a.status as Agent["status"],
-    // AgentSummary doesn't expose the mission's scope - would need a
-    // separate, unsigned way to read scope for display (open question,
-    // not yet decided - see docs/CONTRACT.md). Empty until that's built.
-    allowedActions: [],
-    currentJob: undefined,
-    // AgentSummary doesn't include createdAt either (only the fuller Agent
-    // type does) - same open question as above.
-    startedAt: "",
-    parentAgentId: undefined, // delegation isn't built on the backend yet
-  }));
-}
-
 // The structured allowlist a mission resolves to - mirrors MissionScope in
 // sigil-backend/packages/middleware/src/contract.ts exactly (see
 // docs/CONTRACT.md §3/§6 for the enforcement semantics this feeds).
@@ -112,6 +87,49 @@ export interface AgentMission {
   scope: MissionScope;
   hash: string;
   createdAt: string;
+}
+
+// GET /agents/:id/mission - the read counterpart of setAgentMission below.
+// Non-ok (404, no mission declared yet) is treated the same as "no mission"
+// rather than thrown - a missing mission isn't an error condition here.
+async function getAgentMission(agentId: string): Promise<AgentMission | undefined> {
+  const res = await fetch(`${API_BASE}/agents/${agentId}/mission`);
+  if (!res.ok) return undefined;
+  return res.json();
+}
+
+// GET /agents (real - wired to the backend)
+export async function getAgents(): Promise<Agent[]> {
+  const res = await fetch(`${API_BASE}/agents`);
+  const summaries = (await res.json()) as { id: string; name: string; status: string; mission: string | null }[];
+
+  // AgentSummary is deliberately compact and doesn't carry scope - fetch the
+  // full Mission (in parallel) for each agent that actually has one, so
+  // allowedActions/missionId reflect real data instead of placeholders.
+  const missions = await Promise.all(
+    summaries.map((a) => (a.mission !== null ? getAgentMission(a.id) : Promise.resolve(undefined)))
+  );
+
+  return summaries.map((a, i) => {
+    const mission = missions[i];
+    return {
+      id: a.id,
+      name: a.name,
+      missionId: mission?.id ?? "",
+      missionDescription: a.mission ?? "",
+      status: a.status as Agent["status"],
+      // "Allowed to do" should cover everything the agent can legitimately
+      // attempt, including actions that pause for a human first - allow-only
+      // would misleadingly suggest e.g. email.send is off the table entirely
+      // when it's really just gated on a checkpoint.
+      allowedActions: mission ? [...mission.scope.allow, ...mission.scope.requireApproval] : [],
+      currentJob: undefined,
+      // AgentSummary doesn't include createdAt either (only the fuller Agent
+      // type does) - open question, not yet decided (see docs/CONTRACT.md).
+      startedAt: "",
+      parentAgentId: undefined, // delegation isn't built on the backend yet
+    };
+  });
 }
 
 // POST /agents/:id/mission (real - wired to the backend) - the dashboard's
