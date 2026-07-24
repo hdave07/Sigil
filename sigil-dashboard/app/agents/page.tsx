@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getAgents, getAuditLog, getMission, getPendingActions } from "@/lib/api";
-import { Agent, AgentAction, AgentStatus, AuditEvent, AuditEventType, Mission } from "@/lib/types";
+import { getAgents, getAgentMission, getAuditLog, getPendingActions, type AgentMission } from "@/lib/api";
+import { Agent, AgentAction, AgentStatus, AuditEvent, AuditEventType } from "@/lib/types";
 import Badge from "@/components/Badge";
 import FlagTag from "@/components/FlagTag";
 import { ACTION_TYPE_LABELS } from "@/lib/actionTypes";
@@ -84,7 +84,7 @@ export default function AgentsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mission, setMission] = useState<Mission | null>(null);
+  const [mission, setMission] = useState<AgentMission | null>(null);
 
   useEffect(() => {
     Promise.all([getAgents(), getPendingActions(), getAuditLog()]).then(([a, p, log]) => {
@@ -104,7 +104,7 @@ export default function AgentsPage() {
       return;
     }
     let cancelled = false;
-    getMission(selected.missionId).then((m) => {
+    getAgentMission(selected.id).then((m) => {
       if (!cancelled) setMission(m ?? null);
     });
     return () => {
@@ -313,7 +313,7 @@ export default function AgentsPage() {
                 <div className="bg-accent/[0.045] border border-accent/20 rounded-lg p-4 mb-4">
                   <div className="mb-3">
                     <div className="eyebrow mb-1">Mission</div>
-                    <div className="text-[13px] leading-relaxed">{mission?.description ?? selected.missionDescription}</div>
+                    <div className="text-[13px] leading-relaxed">{mission?.text ?? selected.missionDescription}</div>
                   </div>
                   <div>
                     <div className="eyebrow mb-1">Mission hash</div>

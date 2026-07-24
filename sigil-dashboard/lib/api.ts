@@ -92,7 +92,9 @@ export interface AgentMission {
 // GET /agents/:id/mission - the read counterpart of setAgentMission below.
 // Non-ok (404, no mission declared yet) is treated the same as "no mission"
 // rather than thrown - a missing mission isn't an error condition here.
-async function getAgentMission(agentId: string): Promise<AgentMission | undefined> {
+// Exported so pages can fetch a single agent's real mission directly
+// (getMission below is the legacy mock-only version, still local-array-only).
+export async function getAgentMission(agentId: string): Promise<AgentMission | undefined> {
   const res = await fetch(`${API_BASE}/agents/${agentId}/mission`);
   if (!res.ok) return undefined;
   return res.json();
