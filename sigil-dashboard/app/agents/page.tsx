@@ -318,7 +318,7 @@ export default function AgentsPage() {
                   <div>
                     <div className="eyebrow mb-1">Mission hash</div>
                     <span className="font-mono text-[11px] bg-ink text-[#7ee89a] px-2 py-0.5 rounded inline-block">
-                      {mission ? mission.hash : "…"}
+                      {mission ? <>{mission.hash.slice(0, 12)}…</> : "…"}
                     </span>
                   </div>
                 </div>
