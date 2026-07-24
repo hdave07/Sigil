@@ -8,6 +8,7 @@
     "pause-resume-demo": "tsx scripts/pause-resume-demo.ts",
     "demo": "tsx scripts/demo.ts",
     "dev": "tsx scripts/server.ts",
+    "start": "tsx scripts/server.ts",
     "register-test-agent": "tsx scripts/register-test-agent.ts"
   },
   "devDependencies": {

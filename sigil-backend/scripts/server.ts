@@ -19,9 +19,10 @@ const actions = createActionStore(auditLog);
 type Variables = { agentId: string };
 const app = new Hono<{ Variables: Variables }>();
 
-// Local dev origin for now - the dashboard's real deployed URL replaces
-// this once both sides actually deploy (Days 11-14 territory, not now).
-app.use("*", cors({ origin: "http://localhost:3000" }));
+// Falls back to local dev if DASHBOARD_ORIGIN isn't set (e.g. running
+// locally without an .env). Set this on Railway to the real deployed
+// Vercel URL once the dashboard is live.
+app.use("*", cors({ origin: process.env.DASHBOARD_ORIGIN ?? "http://localhost:3000" }));
 
 /**
  * Verifies a signed agent request before its route handler runs. To check
@@ -261,6 +262,11 @@ app.post("/action/:id/status", async (c) => {
   return c.json({ status });
 });
 
-serve({ fetch: app.fetch, port: 8787 }, (info) => {
-  console.log(`Sigil middleware listening on http://localhost:${info.port}`);
+// Railway (and most hosting platforms) assign their own port via PORT and
+// expect the app to bind to it - falls back to 8787 for local dev, where
+// nothing sets that variable.
+const port = Number(process.env.PORT) || 8787;
+
+serve({ fetch: app.fetch, port }, (info) => {
+  console.log(`Sigil middleware listening on port ${info.port}`);
 });
