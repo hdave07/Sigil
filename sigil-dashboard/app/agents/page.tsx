@@ -6,6 +6,7 @@ import { getAgents, getAuditLog, getMission, getPendingActions } from "@/lib/api
 import { Agent, AgentAction, AgentStatus, AuditEvent, AuditEventType, Mission } from "@/lib/types";
 import Badge from "@/components/Badge";
 import FlagTag from "@/components/FlagTag";
+import { ACTION_TYPE_LABELS } from "@/lib/actionTypes";
 
 const statusColor: Record<AgentStatus, "green" | "orange" | "red" | "gray"> = {
   idle: "gray",
@@ -37,6 +38,10 @@ const statusLabel: Record<AgentStatus, string> = {
 function displayStatus(agent: Agent, pendingCount: number): AgentStatus {
   if (agent.status === "stopped" || agent.status === "completed") return agent.status;
   return pendingCount > 0 ? "paused" : agent.status;
+}
+
+function labelActions(types: string[]): string {
+  return types.map((t) => ACTION_TYPE_LABELS[t] ?? t).join(", ");
 }
 
 const resultColor: Record<AuditEventType, string> = {
@@ -249,7 +254,7 @@ export default function AgentsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-gray-500">{a.currentJob}</td>
-                    <td className="px-4 py-2.5 text-gray-400 text-[12px]">{a.allowedActions.join(", ")}</td>
+                    <td className="px-4 py-2.5 text-gray-400 text-[12px]">{labelActions(a.allowedActions)}</td>
                     <td className="px-4 py-2.5">
                       <Badge color={statusColor[aStatus]}>{statusLabel[aStatus]}</Badge>
                     </td>
@@ -323,7 +328,7 @@ export default function AgentsPage() {
                   <div className="flex flex-wrap gap-1.5">
                     {selected.allowedActions.map((action) => (
                       <span key={action} className="badge bg-gray-100 text-gray-500 font-medium">
-                        {action}
+                        {ACTION_TYPE_LABELS[action] ?? action}
                       </span>
                     ))}
                   </div>
@@ -340,8 +345,8 @@ export default function AgentsPage() {
                         <div className="text-[11px] text-gray-500 mb-0.5">Delegated by</div>
                         <div className="text-sm font-semibold text-lineageText">{parentAgent.name}</div>
                         <div className="text-[11px] text-gray-500 mt-1">
-                          This agent's scope ({selected.allowedActions.join(", ")}) is narrower than{" "}
-                          {parentAgent.name}'s ({parentAgent.allowedActions.join(", ")}).
+                          This agent's scope ({labelActions(selected.allowedActions)}) is narrower than{" "}
+                          {parentAgent.name}'s ({labelActions(parentAgent.allowedActions)}).
                         </div>
                       </button>
                     )}
@@ -354,7 +359,7 @@ export default function AgentsPage() {
                         <div className="text-[11px] text-gray-500 mb-0.5">Delegated to</div>
                         <div className="text-sm font-semibold text-lineageText">{child.name}</div>
                         <div className="text-[11px] text-gray-500 mt-1">
-                          Given a narrower scope: {child.allowedActions.join(", ")}
+                          Given a narrower scope: {labelActions(child.allowedActions)}
                         </div>
                       </button>
                     ))}
