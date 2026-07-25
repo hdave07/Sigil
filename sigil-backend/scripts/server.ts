@@ -31,6 +31,24 @@ app.use("*", cors({ origin: process.env.DASHBOARD_ORIGIN ?? "http://localhost:30
  * Signature-Input header itself, so it has to be read (peekKeyid) before
  * the actual verification can happen.
  */
+/**
+ * Reconstructs the URL as the CLIENT actually signed it. Railway (and most
+ * PaaS reverse proxies) terminate TLS at the edge and forward to this
+ * process over plain HTTP, so c.req.url's scheme reflects that internal
+ * hop (http) rather than what the client's request line used (https) -
+ * left uncorrected, every signed request's @target-uri mismatches and
+ * verification fails 100% of the time in production. X-Forwarded-Proto
+ * carries the original public-facing scheme; falls back to c.req.url
+ * unchanged when absent (e.g. local dev, no proxy in front).
+ */
+function externalUrl(c: Context<{ Variables: Variables }>): string {
+  const forwardedProto = c.req.header("x-forwarded-proto");
+  if (!forwardedProto) return c.req.url;
+  const url = new URL(c.req.url);
+  url.protocol = `${forwardedProto.split(",")[0].trim()}:`;
+  return url.toString();
+}
+
 async function verifySignedRequest(c: Context<{ Variables: Variables }>, next: Next) {
   const signatureInput = c.req.header("signature-input");
   const signature = c.req.header("signature");
@@ -55,7 +73,7 @@ async function verifySignedRequest(c: Context<{ Variables: Variables }>, next: N
   const result = await verifyRequest(
     {
       method: c.req.method,
-      url: c.req.url,
+      url: externalUrl(c),
       body: bodyText.length > 0 ? bodyText : undefined,
       headers: {
         "signature-input": signatureInput,
