@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getAgents, getAuditLog } from "@/lib/api";
 import { Agent, AuditEvent, AuditEventType, FlagType } from "@/lib/types";
 import FlagTag from "@/components/FlagTag";
+import { capitalize } from "@/lib/format";
 
 const resultColor: Record<AuditEventType, string> = {
   allowed: "#3f7d52",
@@ -193,7 +194,7 @@ export default function AuditPage() {
               >
                 {ev.agentName}
               </span>
-              <span className="text-[13px] text-gray-600 flex-1 pt-0.5">{ev.what}</span>
+              <span className="text-[13px] text-gray-600 flex-1 pt-0.5">{capitalize(ev.what)}</span>
               <span
                 className="badge whitespace-nowrap shrink-0"
                 style={{ background: `${resultColor[ev.type]}15`, color: resultColor[ev.type] }}
@@ -272,7 +273,7 @@ export default function AuditPage() {
                         <span className="text-[11px] text-gray-400 tabular-nums w-14 shrink-0 pt-0.5">
                           {ev.time}
                         </span>
-                        <span className="text-[13px] text-gray-600 flex-1 pt-0.5">{ev.what}</span>
+                        <span className="text-[13px] text-gray-600 flex-1 pt-0.5">{capitalize(ev.what)}</span>
                         <span
                           className="badge whitespace-nowrap shrink-0"
                           style={{ background: `${resultColor[ev.type]}15`, color: resultColor[ev.type] }}

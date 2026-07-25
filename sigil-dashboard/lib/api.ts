@@ -17,6 +17,7 @@
 
 import { Agent, AgentAction, ActionStatus, AuditEvent, AuditEventType, FlagType, Mission } from "./types";
 import { actions as seedActions, missions as seedMissions } from "./mockData";
+import { ACTION_TYPE_LABELS } from "./actionTypes";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? ""; // set in .env.local - see README
 
@@ -155,6 +156,46 @@ export async function setAgentMission(
   return res.json();
 }
 
+/** Several backend strings are built as `<raw type> on <rest>` - e.g.
+ * actionAttempted (`web.read on "https://competitor.com"`) and audit detail
+ * (`web.read on "..." - "web.read" was never declared...`). Split once here
+ * so every caller relabels the type the same way. Returns undefined if the
+ * text doesn't have that shape (e.g. lifecycle audit events like
+ * "mission declared: ..." - nothing to relabel, left unchanged by callers). */
+function splitTypeOn(text: string): { rawType: string; label: string; rest: string } | undefined {
+  const idx = text.indexOf(" on ");
+  if (idx === -1) return undefined;
+  const rawType = text.slice(0, idx);
+  const rest = text.slice(idx + " on ".length);
+  return { rawType, label: ACTION_TYPE_LABELS[rawType] ?? rawType, rest };
+}
+
+/** Swaps every quoted occurrence of the raw type (e.g. `"web.read"`) for its
+ * quoted label within a narrative string - reason/detail text quotes the
+ * type again mid-sentence (see mission.ts's checkAction), a second spot
+ * splitTypeOn's single split doesn't reach. */
+function relabelQuotedType(text: string, rawType: string): string {
+  const label = ACTION_TYPE_LABELS[rawType] ?? rawType;
+  return label === rawType ? text : text.split(`"${rawType}"`).join(`"${label}"`);
+}
+
+/** mission.ts's checkAction always phrases an off_mission reason as
+ * `"<type>" is an allowed action type, but <off-mission-specific detail>.`
+ * - one sentence covering both gates. PendingApproval has no separate field
+ * for the "allowed" half, so it's synthesized here (from the label, not the
+ * raw type) and the reason is trimmed down to just the off-mission half, so
+ * the two halves can render in their own boxes (green/red) instead of the
+ * green one sitting empty. */
+function splitOffMissionReason(reason: string, label: string): { permittedNote: string; reason: string } {
+  const marker = ", but ";
+  const idx = reason.indexOf(marker);
+  const remainder = idx === -1 ? reason : reason.slice(idx + marker.length);
+  return {
+    permittedNote: `"${label}" is an allowed action type for this mission.`,
+    reason: remainder.charAt(0).toUpperCase() + remainder.slice(1),
+  };
+}
+
 // GET /pending (real - wired to the backend)
 export async function getPendingActions(): Promise<AgentAction[]> {
   const res = await fetch(`${API_BASE}/pending`);
@@ -170,23 +211,35 @@ export async function getPendingActions(): Promise<AgentAction[]> {
     timestamp: string;
   }[];
 
-  return list.map((p) => ({
-    id: p.id,
-    agentId: p.agentId,
-    agentName: p.agentName,
-    // PendingApproval doesn't separate a raw type from the human-readable
-    // label the way our AgentAction does - both get the same string.
-    type: p.actionAttempted,
-    label: p.actionAttempted,
-    inBounds: false, // dead field on our side - never read, kept for shape compatibility
-    status: "pending",
-    missionDescription: p.mission,
-    flagType: toFlagType(p.flagType),
-    reason: p.reason,
-    permittedNote: undefined, // backend's reason covers both gates in one sentence for now
-    payload: undefined, // backend sends a narrative `context` string, not key/value pairs
-    requestedAt: p.timestamp,
-  }));
+  return list.map((p) => {
+    const split = splitTypeOn(p.actionAttempted);
+    const labeledAction = split ? `${split.label} on ${split.rest}` : p.actionAttempted;
+    const relabeledReason = split ? relabelQuotedType(p.reason, split.rawType) : p.reason;
+
+    const flagType = toFlagType(p.flagType);
+    const isOffMission = p.flagType === "off_mission" && split !== undefined;
+    const { permittedNote, reason } = isOffMission
+      ? splitOffMissionReason(relabeledReason, split!.label)
+      : { permittedNote: undefined, reason: relabeledReason };
+
+    return {
+      id: p.id,
+      agentId: p.agentId,
+      agentName: p.agentName,
+      // PendingApproval doesn't separate a raw type from the human-readable
+      // label the way our AgentAction does - both get the same string.
+      type: labeledAction,
+      label: labeledAction,
+      inBounds: false, // dead field on our side - never read, kept for shape compatibility
+      status: "pending",
+      missionDescription: p.mission,
+      flagType,
+      reason,
+      permittedNote,
+      payload: undefined, // backend sends a narrative `context` string, not key/value pairs
+      requestedAt: p.timestamp,
+    };
+  });
 }
 
 // GET /action/:id/status - NOT wired to the real endpoint: that route is
@@ -242,18 +295,26 @@ export async function getAuditLog(): Promise<AuditEvent[]> {
   }[];
   const nameById = new Map(agents.map((a) => [a.id, a.name]));
 
-  return entries.map((e) => ({
-    id: e.id,
-    time: formatTime(e.timestamp),
-    // AuditEntry only carries agentId, not a display name - resolved here
-    // against the agent list, same join the backend's own /pending route
-    // does internally.
-    agentName: nameById.get(e.agentId) ?? "System",
-    what: e.detail,
-    result: EVENT_RESULT[e.event] ?? e.event,
-    type: toAuditEventType(e.type),
-    flagType: toFlagType(e.flagType),
-    hash: e.hash,
-    prevHash: e.previousHash,
-  }));
+  return entries.map((e) => {
+    // actions.ts writes detail as `<type> on "<target>" - <reason>` (attempt)
+    // or `<type> on "<target>" <decision> by human review.` (decide) - both
+    // shapes have the raw type up front, and the attempt shape repeats it
+    // quoted inside the reason half.
+    const split = splitTypeOn(e.detail);
+    const what = split ? `${split.label} on ${relabelQuotedType(split.rest, split.rawType)}` : e.detail;
+    return {
+      id: e.id,
+      time: formatTime(e.timestamp),
+      // AuditEntry only carries agentId, not a display name - resolved here
+      // against the agent list, same join the backend's own /pending route
+      // does internally.
+      agentName: nameById.get(e.agentId) ?? "System",
+      what,
+      result: EVENT_RESULT[e.event] ?? e.event,
+      type: toAuditEventType(e.type),
+      flagType: toFlagType(e.flagType),
+      hash: e.hash,
+      prevHash: e.previousHash,
+    };
+  });
 }

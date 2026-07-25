@@ -7,6 +7,7 @@ import { Agent, AgentAction, AgentStatus, AuditEvent, AuditEventType } from "@/l
 import Badge from "@/components/Badge";
 import FlagTag from "@/components/FlagTag";
 import { ACTION_TYPE_LABELS } from "@/lib/actionTypes";
+import { capitalize } from "@/lib/format";
 
 const statusColor: Record<AgentStatus, "green" | "orange" | "red" | "gray"> = {
   idle: "gray",
@@ -27,21 +28,30 @@ const statusLabel: Record<AgentStatus, string> = {
 };
 
 // TODO: once the real backend is live, confirm whether we should trust
-// agent.status directly instead of deriving "paused" client-side here — the
-// backend already tracks "paused" (and "waiting") as real states, and we
-// haven't confirmed whether their semantics match what we derive below from
-// pending-approval count. Until then, this keeps our existing derivation and
-// just passes through any other backend value unchanged.
+// agent.status directly instead of deriving "paused"/"idle" client-side here
+// — the backend already tracks "paused" (and "waiting") as real states, and
+// we haven't confirmed whether their semantics match what we derive below.
 //
-// Terminal states ("stopped", "completed") always win. Otherwise an agent
-// displays as "paused" if anything's pending, or its raw status if not.
+// "stopped" always wins. Otherwise: anything pending is "paused"; no mission
+// declared yet is "idle" (missionDescription being empty is a reliable
+// signal - no backend change needed to know this); anything else is
+// "running".
 function displayStatus(agent: Agent, pendingCount: number): AgentStatus {
-  if (agent.status === "stopped" || agent.status === "completed") return agent.status;
-  return pendingCount > 0 ? "paused" : agent.status;
+  if (agent.status === "stopped") return "stopped";
+  if (pendingCount > 0) return "paused";
+  if (!agent.missionDescription) return "idle";
+  return "running";
 }
 
+// Reads as a sentence-style list ("Read web pages, draft emails, send
+// emails") rather than a row of independently-capitalized titles - only the
+// first item keeps its label's natural capital, everything after gets
+// lowercased at the join.
 function labelActions(types: string[]): string {
-  return types.map((t) => ACTION_TYPE_LABELS[t] ?? t).join(", ");
+  return types
+    .map((t) => ACTION_TYPE_LABELS[t] ?? t)
+    .map((label, i) => (i === 0 ? label : label.charAt(0).toLowerCase() + label.slice(1)))
+    .join(", ");
 }
 
 const resultColor: Record<AuditEventType, string> = {
@@ -386,7 +396,7 @@ export default function AgentsPage() {
                             <FlagTag flagType={ev.flagType} />
                           </span>
                         </div>
-                        <div className="text-gray-600">{ev.what}</div>
+                        <div className="text-gray-600">{capitalize(ev.what)}</div>
                       </div>
                     ))}
                   </div>

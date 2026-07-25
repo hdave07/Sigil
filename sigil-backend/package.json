@@ -10,6 +10,7 @@
     "dev": "tsx scripts/server.ts",
     "start": "tsx scripts/server.ts",
     "register-test-agent": "tsx scripts/register-test-agent.ts",
+    "attempt-action": "tsx scripts/attempt-action.ts",
     "seed-demo": "tsx scripts/seed-demo.ts"
   },
   "devDependencies": {

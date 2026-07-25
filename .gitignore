@@ -3,3 +3,4 @@
 **/tsconfig.tsbuildinfo
 .DS_Store
 **/.env*.local
+**/.agent-keys/

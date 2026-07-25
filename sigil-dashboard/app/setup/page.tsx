@@ -119,10 +119,7 @@ export default function SetupPage() {
         <div>
           <h1 className="text-[26px] font-bold tracking-tight text-ink mb-1">Mission setup</h1>
           <p className="text-[13px] text-gray-500 mb-7 max-w-lg leading-relaxed">
-            Pick an agent, describe its mission in plain language, then tick exactly which action
-            types it can use on its own and which always need your sign-off. Every action it
-            attempts gets checked against this — anything that doesn&apos;t fit gets flagged and
-            paused for your review.
+            Choose an unconfigured agent, describe what it's purpose, and resolve which actions it can execute on its own versus which ones need explicit approval from you. Anything outside that gets paused and waits for your desicion.
           </p>
 
           <form onSubmit={handleSubmit} className="bg-white border border-border rounded-xl shadow-sm p-6 flex flex-col gap-5">
@@ -200,7 +197,7 @@ export default function SetupPage() {
               <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">
                 Flag this agent&apos;s allowed actions as off-mission if their description mentions
                 any of these words or phrases — e.g., for a pricing-research mission, &quot;poach&quot;
-                or &quot;switch providers&quot; would catch an allowed email.draft being misused to
+                or &quot;switch providers&quot; would catch an allowed draft emails action being misused to
                 lure away a competitor&apos;s customers.
               </p>
               <input
