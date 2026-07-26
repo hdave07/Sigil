@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
+
 import { serve } from "@hono/node-server";
 import { Hono, type Context, type Next } from "hono";
 import { cors } from "hono/cors";
@@ -6,6 +9,7 @@ import { createMissionStore } from "../packages/middleware/src/missions.js";
 import { createAuditLog } from "../packages/middleware/src/audit.js";
 import { createActionStore } from "../packages/middleware/src/actions.js";
 import { importPublicKeyJwk, verifyRequest, peekKeyid } from "../packages/aauth-core/src/index.js";
+import { suggestMissionScope, MissingApiKeyError } from "../packages/middleware/src/missionScopeSuggester.js";
 import type { AgentSummary, MissionScope, PendingApproval } from "../packages/middleware/src/contract.js";
 
 // --- composition root ---------------------------------------------------
@@ -192,6 +196,33 @@ app.get("/agents/:id/mission", (c) => {
   const mission = missions.getForAgent(agentId);
   if (!mission) return c.json({ error: "no mission declared for this agent" }, 404);
   return c.json(mission);
+});
+
+/**
+ * POST /missions/suggest-scope - Claude-assisted authoring aid for the
+ * dashboard's mission-setup checklist. Deliberately NOT signature-verified,
+ * same unsigned/dashboard-facing model as POST /agents/:id/mission - this is
+ * a human drafting a mission, not an agent proving its identity. Stateless:
+ * never writes to the audit log or any store (see missionScopeSuggester.ts's
+ * header comment - this is authoring, never enforcement).
+ */
+app.post("/missions/suggest-scope", async (c) => {
+  const body = await c.req.json<{ text?: string }>();
+  const text = (body.text ?? "").trim();
+  if (text.length < 15) {
+    return c.json({ error: "mission text is too short to suggest a scope for" }, 400);
+  }
+
+  try {
+    const suggestion = await suggestMissionScope(text);
+    return c.json(suggestion);
+  } catch (err) {
+    if (err instanceof MissingApiKeyError) {
+      return c.json({ error: "GROQ_API_KEY is not configured on the server" }, 500);
+    }
+    console.error("POST /missions/suggest-scope failed:", err);
+    return c.json({ error: "failed to generate a scope suggestion" }, 502);
+  }
 });
 
 /** POST /action (signed) - attempt an action, checked against the agent's current mission. */
