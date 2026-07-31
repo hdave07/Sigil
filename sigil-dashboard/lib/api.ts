@@ -196,6 +196,37 @@ function splitOffMissionReason(reason: string, label: string): { permittedNote: 
   };
 }
 
+export interface SuggestedActionType {
+  type: string;
+  label: string;
+  reason: string;
+}
+
+export interface SuggestedScope {
+  allow: SuggestedActionType[];
+  requireApproval: SuggestedActionType[];
+  offMissionKeywords: string[];
+}
+
+// POST /missions/suggest-scope - authoring aid only, called from the Setup
+// screen's debounced effect. Never touches enforcement or the audit log.
+export async function suggestMissionScope(
+  text: string,
+  signal?: AbortSignal
+): Promise<SuggestedScope> {
+  const res = await fetch(`${API_BASE}/missions/suggest-scope`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+    signal,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}) as { error?: string });
+    throw new Error(body.error ?? `failed to suggest scope (${res.status})`);
+  }
+  return res.json();
+}
+
 // GET /pending (real - wired to the backend)
 export async function getPendingActions(): Promise<AgentAction[]> {
   const res = await fetch(`${API_BASE}/pending`);

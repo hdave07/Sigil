@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getAgents, setAgentMission, MissionScope } from "@/lib/api";
+import { getAgents, setAgentMission, suggestMissionScope, MissionScope, SuggestedScope } from "@/lib/api";
 import { Agent } from "@/lib/types";
 import { ACTION_TYPES } from "@/lib/actionTypes";
+
+const MIN_SUGGEST_LENGTH = 15; // matches the backend's own guard on POST /missions/suggest-scope
+const DEBOUNCE_MS = 900;
 
 // Each type gets exactly one of three mutually-exclusive states.
 type ScopeChoice = "not_permitted" | "allow" | "requireApproval";
@@ -39,6 +42,21 @@ export default function SetupPage() {
   const [confirmation, setConfirmation] = useState<{ agentName: string; missionText: string } | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // Claude-assisted scope suggestion (authoring aid only - see CONTRACT.md
+  // §7/§8). extraActionTypes holds types Claude proposed beyond the static
+  // baseline; reasonsByType feeds the per-row "why" tooltip.
+  const [extraActionTypes, setExtraActionTypes] = useState<{ type: string; label: string }[]>([]);
+  const [reasonsByType, setReasonsByType] = useState<Record<string, string>>({});
+  // Once the human manually touches any toggle/keyword, auto-suggestion stops
+  // silently overwriting their edits while they keep typing - see fireSuggestion.
+  const [userEditedChecklist, setUserEditedChecklist] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
+  // Refs, not state: bumping suggestGenerationRef is how a slower, superseded
+  // response recognizes it's stale after its own await resolves.
+  const suggestGenerationRef = useRef(0);
+  const suggestAbortRef = useRef<AbortController | null>(null);
+
   // Only offer agents that haven't been given a mission yet - once an agent
   // has one, re-configuring it isn't this screen's job (the dropdown
   // shouldn't invite overwriting an existing mission by accident).
@@ -57,6 +75,7 @@ export default function SetupPage() {
   }, [confirmation]);
 
   function setChoice(type: string, choice: ScopeChoice) {
+    setUserEditedChecklist(true); // freezes auto-suggestion - see the debounce effect below
     setChoices((cur) => ({ ...cur, [type]: choice }));
   }
 
@@ -66,13 +85,79 @@ export default function SetupPage() {
       .map((p) => p.trim())
       .filter((p) => p.length > 0);
     if (parts.length === 0) return;
+    setUserEditedChecklist(true);
     setOffMissionKeywords((cur) => Array.from(new Set([...cur, ...parts])));
     setKeywordInput("");
   }
 
   function removeKeyword(word: string) {
+    setUserEditedChecklist(true);
     setOffMissionKeywords((cur) => cur.filter((w) => w !== word));
   }
+
+  // Baseline 9 always present + any new types Claude proposed, deduped by
+  // type - the static label wins for the known 9 by construction (the spread
+  // order means ACTION_TYPES entries are never overwritten by extraRows).
+  const extraRows = extraActionTypes.filter((extra) => !ACTION_TYPES.some((a) => a.type === extra.type));
+  const rows = [...ACTION_TYPES, ...extraRows];
+
+  function applySuggestion(result: SuggestedScope) {
+    // Does NOT touch userEditedChecklist - this is the auto-suggestion path,
+    // not a manual edit, so it must not freeze itself out.
+    setChoices((cur) => {
+      const next = { ...cur };
+      for (const { type } of result.allow) next[type] = "allow";
+      for (const { type } of result.requireApproval) next[type] = "requireApproval";
+      return next;
+    });
+    setExtraActionTypes(
+      [...result.allow, ...result.requireApproval]
+        .filter(({ type }) => !ACTION_TYPES.some((a) => a.type === type))
+        .map(({ type, label }) => ({ type, label }))
+    );
+    setOffMissionKeywords((cur) => Array.from(new Set([...cur, ...result.offMissionKeywords])));
+    setReasonsByType(
+      Object.fromEntries([...result.allow, ...result.requireApproval].map((s) => [s.type, s.reason]))
+    );
+  }
+
+  async function fireSuggestion(missionText: string) {
+    suggestGenerationRef.current += 1;
+    const myGeneration = suggestGenerationRef.current;
+    suggestAbortRef.current?.abort(); // cancel any still-in-flight older request
+    const controller = new AbortController();
+    suggestAbortRef.current = controller;
+
+    setSuggesting(true);
+    setSuggestError(null);
+    try {
+      const result = await suggestMissionScope(missionText, controller.signal);
+      if (myGeneration !== suggestGenerationRef.current) return; // superseded, discard
+      applySuggestion(result);
+    } catch (err) {
+      if (controller.signal.aborted) return; // expected: superseded, not a real failure
+      if (myGeneration !== suggestGenerationRef.current) return;
+      setSuggestError(err instanceof Error ? err.message : "Failed to suggest a scope.");
+    } finally {
+      if (myGeneration === suggestGenerationRef.current) setSuggesting(false);
+    }
+  }
+
+  function handleRegenerate() {
+    if (text.trim().length < MIN_SUGGEST_LENGTH) return;
+    setUserEditedChecklist(false);
+    void fireSuggestion(text); // fires immediately, doesn't wait for the debounce timer
+  }
+
+  // Debounced auto-suggest: fires ~900ms after typing stops, skipped while
+  // frozen (userEditedChecklist) or below the minimum length.
+  useEffect(() => {
+    if (userEditedChecklist) return;
+    if (text.trim().length < MIN_SUGGEST_LENGTH) return;
+    const timer = setTimeout(() => void fireSuggestion(text), DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, userEditedChecklist]);
 
   function handleKeywordKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" || e.key === ",") {
@@ -81,10 +166,12 @@ export default function SetupPage() {
     }
   }
 
-  const allow = ACTION_TYPES.filter(({ type }) => choices[type] === "allow").map(({ type }) => type);
-  const requireApproval = ACTION_TYPES.filter(({ type }) => choices[type] === "requireApproval").map(
-    ({ type }) => type
-  );
+  // Must iterate `rows` (baseline + Claude's extra types), not just the
+  // static ACTION_TYPES - otherwise an accepted suggested type (e.g.
+  // "payment.refund") would sit in `choices` with a value but silently never
+  // make it into scope.allow/scope.requireApproval on submit.
+  const allow = rows.filter(({ type }) => choices[type] === "allow").map(({ type }) => type);
+  const requireApproval = rows.filter(({ type }) => choices[type] === "requireApproval").map(({ type }) => type);
   const scope: MissionScope = { allow, requireApproval, offMissionKeywords };
 
   function resetForm() {
@@ -93,6 +180,11 @@ export default function SetupPage() {
     setChoices({});
     setOffMissionKeywords([]);
     setKeywordInput("");
+    setExtraActionTypes([]);
+    setReasonsByType({});
+    setUserEditedChecklist(false);
+    setSuggestError(null);
+    suggestGenerationRef.current += 1; // orphans any straggling in-flight suggestion
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -164,13 +256,42 @@ export default function SetupPage() {
             </div>
 
             <div>
-              <label className="block eyebrow mb-1.5">Action types</label>
+              <div className="flex items-center gap-2 mb-1.5">
+                <label className="eyebrow">Action types</label>
+                {suggesting && <span className="text-[11px] text-gray-400">Suggesting…</span>}
+                {userEditedChecklist && !suggesting && (
+                  <button
+                    type="button"
+                    onClick={handleRegenerate}
+                    className="text-[11px] text-accent hover:underline"
+                  >
+                    Regenerate suggestion
+                  </button>
+                )}
+              </div>
+              {suggestError && (
+                <p className="text-[11px] text-red mb-1.5">
+                  {suggestError} — you can still fill this out manually.
+                </p>
+              )}
               <div className="flex flex-col gap-2">
-                {ACTION_TYPES.map(({ type, label }) => {
+                {rows.map(({ type, label }) => {
                   const current = choices[type] ?? "not_permitted";
+                  const reason = reasonsByType[type];
                   return (
                     <div key={type} className="flex items-center justify-between gap-3">
-                      <span className="text-sm">{label}</span>
+                      <span className="text-sm">
+                        {label}
+                        {reason && (
+                          <span
+                            title={reason}
+                            className="ml-1 text-gray-400 cursor-help"
+                            aria-label="Why this suggestion"
+                          >
+                            ⓘ
+                          </span>
+                        )}
+                      </span>
                       <div className="flex border border-border rounded-lg overflow-hidden">
                         {SCOPE_OPTIONS.map(({ choice, label: optionLabel, selectedClass }) => (
                           <button
