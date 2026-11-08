@@ -1,87 +1,158 @@
 # Sigil
 
-A permission-and-oversight layer for AI agents: agents prove their identity
-with real Ed25519 signatures, declare a mission that resolves to a
-**deterministic** allowed-actions scope (no LLM in the enforcement path), and
-any action outside that scope pauses for a human instead of failing silently
-or running unchecked. Every attempt — allowed, paused, approved, or denied —
-lands in a hash-chained, tamper-evident audit log.
+**Sigil allows a company to say, in plain language, what each of its AI agents is *for* and then stops the agent the moment it does something that doesn't fit, until it receives human approval.**
 
-The differentiator isn't just "is this action type permitted" (a type-only
-allowlist any competitor can build) — it's catching an agent using a
-**fully-permitted** action type to do something that doesn't actually serve
-its mission (e.g. an agent allowed to draft emails using that permission to
-try to poach a competitor's customers instead of the summary it was asked
-for). See [`docs/CONTRACT.md`](docs/CONTRACT.md) §6 for the exact two-phase
-check that makes this possible.
+It's built on [AAuth](https://github.com/dickhardt/AAuth), an emerging IETF standard for agent authentication written by Dick Hardt (the author of OAuth 2.0). This repo is the working prototype with cryptographic agent identity, enforcement, an approval dashboard, and a tamper-evident record of everything that happened.
 
-## Repo layout
+---
+
+## The problem
+
+AI agents now run for hours on their own, reading files, drafting and sending email, querying databases, calling dozens of tools, with no human watching each step.
+
+The security tools companies already have were built for a person clicking a button once. They answer one question: *is this account allowed to do this kind of thing?* For an agent, that isn't enough. Most companies today can **see** what their agents did, after the fact. They can't **stop** an agent in the middle of a task when it starts going somewhere it shouldn't.
+
+## What Sigil does
+
+1. **Every agent gets its own identity.** The agent creates a cryptographic key pair and signs every request, so you can prove *which* agent did *what*.
+2. **Every agent declares a mission.** A plain-language statement of its job — e.g. *"Research competitor pricing and write a summary for the sales team."*
+3. **Every action is checked against that mission while the agent runs.** Actions that fit go through. Actions that don't are **paused, not killed**; the agent waits in place.
+4. **A human approves or denies in the dashboard.** On approval, the agent picks up exactly where it stopped.
+5. **Everything is recorded in a tamper-evident log.** Each entry is cryptographically chained to the one before it, so editing or deleting any past entry is detectable.
+
+## What makes it different:
+
+Most agent-permission tools check one thing: *is this type of action allowed?* Sigil checks two things:
+
+| Check | Question | Example |
+|---|---|---|
+| **1. Permission** | Was this agent ever given this kind of action? | A pricing-research agent tries to query the CRM → **paused: not permitted** |
+| **2. Mission** | It's allowed, but does *this specific* action serve the mission? | The same agent is allowed to draft emails, and uses that to draft outreach luring a competitor's customers to switch → **paused: off-mission** |
+
+The second case is the one a permission check alone can't catch: every individual step is technically allowed, but the agent is no longer doing its job. That's the screen that matters — the dashboard shows the action type as *allowed* and the decision as *paused*, with the reason why.
+
+A third category, **needs approval**, covers actions that are always worth a human look no matter the mission (like sending email to 200 people).
+
+> **Honest note on v0:** the mission check today is deterministic — each mission carries a short list of "off-mission" signals that are matched against what the action is doing. It's deliberately simple: it proves the second gate is real and enforced in the request path. Richer semantic matching is the next step. **No LLM ever sits in the enforcement path.** An LLM is used only as an optional helper that *suggests* a scope from the mission text when a human is setting it up; the human reviews and edits it before it takes effect.
+
+## See it in action
+
+The demo story (every step is real signed HTTP against a real server):
 
 ```
-sigil-backend/     Real Hono middleware — identity, mission enforcement,
-                    pause/approve/resume, hash-chained audit log
-sigil-dashboard/    Next.js dashboard — set missions, review paused actions,
-                    browse the audit timeline
-docs/CONTRACT.md    The authoritative object shapes + endpoint contract
-                    between the two — read this before touching lib/api.ts
-                    or contract.ts
+Agent registers, creates its key pair
+Agent declares mission: "Research competitor pricing, write a summary"
+
+  read competitor's pricing page        → ALLOWED      (logged)
+  draft the pricing summary             → ALLOWED      (logged)
+  draft outreach to poach their customers → PAUSED: off-mission
+  send summary to 200-person sales list → PAUSED: needs approval
+        ↳ agent waits · human reviews in dashboard · approves
+        ↳ agent resumes and sends
+
+Audit log shows every step, each entry hash-chained to the last.
 ```
 
-Each subproject has its own `README.md` with more detail
-([backend](sigil-backend/README.md), [dashboard](sigil-dashboard/README.md));
-this one is the map between them.
+### Run it yourself
 
-## Quickstart (run both together)
+Requires a recent version of Node.js.
 
 ```bash
-# terminal 1 — backend, http://localhost:8787
+# One command, terminal only — starts its own server and runs the
+# read → draft → pause → approve → resume story
+cd sigil-backend
+npm install
+npm run demo
+
+# The off-mission catch specifically (all three verdicts side by side)
+npm run mission-demo
+```
+
+To see it in the dashboard:
+
+```bash
+# terminal 1 — backend on http://localhost:8787
 cd sigil-backend
 npm install
 npm run dev
 
-# terminal 2 — dashboard, http://localhost:3000
+# terminal 2 — dashboard on http://localhost:3000
 cd sigil-dashboard
 npm install
 echo "NEXT_PUBLIC_API_BASE=http://localhost:8787" > .env.local
 npm run dev
+
+# terminal 3 — fill the dashboard with a demo scenario
+cd sigil-backend
+npm run seed-demo
 ```
 
-Open http://localhost:3000 — it redirects to `/agents`. The backend is
-in-memory only (no persistence yet), so state resets on restart; use the
-helper scripts below to populate it.
+Then open http://localhost:3000.
 
-### Useful backend scripts
+**Dashboard screens:**
+- **Setup** — write an agent's mission in plain language and define what it's allowed to do
+- **Agents** — every agent, its mission, and whether it's running or waiting on you
+- **Approvals** — paused actions with full context: what the agent was doing, what it wants to do, and *why* it was stopped (not permitted / off-mission / needs approval)
+- **Audit** — the full timeline, readable by a non-technical reviewer, with each entry's hash visible
 
-All run via `npm run <name>` from `sigil-backend/` against a server already
-listening on 8787 unless noted:
+## Who it's for
+
+Mid-market companies in regulated industries, intech, healthtech, insurance, that build their own agent workflows and are moving from pilots to production, but don't have the in-house security team a large enterprise would use to build this themselves.
+
+The setup is technical and done once by engineers. The ongoing part, deciding what an agent is for, and approving or denying what it does, is meant for the people who actually own the work, not just the security team.
+
+## Why build on AAuth
+
+AAuth is a protocol and not a product. It describes how agents should prove who they are and get permission, so that any agent can work with any system. OAuth was the same: a standard that companies like Auth0 turned into something businesses could actually use.
+
+Sigil aims to be that usable layer for agents: built on the open standard rather than a proprietary format a customer gets locked into, with mission enforcement and human-readable oversight on top.
+
+## How it's built
+
+```
+ ┌─────────────┐   signed requests    ┌──────────────────────┐
+ │  AI agent   │ ───────────────────▶ │   Sigil middleware   │
+ │  key pair   │                      │  1. verify signature │
+ │  + mission  │ ◀─────────────────── │  2. permission check │
+ └─────────────┘  allow / pause       │  3. mission check    │
+       ▲                              │  4. write audit log  │
+       │ resumes on approval          └──────────┬───────────┘
+       │                                         │
+       │                              ┌──────────▼───────────┐
+       └────────── approve / deny ─── │      Dashboard       │
+                                      └──────────────────────┘
+```
+
+- **`sigil-backend/`** — TypeScript + Hono
+  - `packages/aauth-core` — Ed25519 keys and HTTP Message Signatures (RFC 9421) using the built-in Web Crypto API, no third-party crypto libraries. Kept separate from everything else so the protocol layer can change without touching enforcement.
+  - `packages/middleware` — the permission and mission checks, pause / approve / resume, and the hash-chained audit log
+  - `scripts/` — the server and the demo scripts
+- **`sigil-dashboard/`** — Next.js + Tailwind
+- **`docs/CONTRACT.md`** — the exact API and data shapes shared by backend and dashboard; §6 spells out the enforcement order step by step
+
+### Backend scripts
+
+Run from `sigil-backend/` with `npm run <name>`:
 
 | Script | What it does |
 |---|---|
-| `dev` / `start` | Starts the server |
-| `seed-demo` | Populates a running server with a full demo scenario over real signed HTTP |
-| `register-test-agent -- "<name>"` | Registers a fresh agent, saves its keypair to `.agent-keys/` (gitignored — real private keys) |
-| `attempt-action -- <agentId> <type> <target> <detail>` | Signs and attempts one action as a saved agent, prints the verdict |
-| `demo` | One-command, self-contained run of the full Part 3 story (spawns its own server) |
-| `roundtrip` | Standalone signing/verification proof — no server needed |
-| `mission-demo`, `pause-resume-demo` | Earlier in-process checkpoints for mission enforcement and the pause/approve flow |
+| `demo` | Full story in one command (starts its own server) |
+| `dev` / `start` | Starts the server on port 8787 |
+| `seed-demo` | Fills a running server with a demo scenario, including an off-mission catch |
+| `mission-demo` | Shows all three verdicts: allowed, not permitted, off-mission |
+| `pause-resume-demo` | Shows an agent pausing, waiting, and resuming on approval |
+| `roundtrip` | Proves signing and verification on their own, no server needed |
+| `register-test-agent -- "<name>"` | Registers a new agent and saves its keys locally (gitignored) |
+| `attempt-action -- <agentId> <type> <target> <detail>` | Signs and sends one action, prints the verdict |
 
-## What's real vs. deferred
+## Development Status
 
-**Real:** Ed25519 signing (RFC 9421 HTTP message signatures) with zero
-third-party crypto dependencies, all 10 contract endpoints live over HTTP,
-deterministic mission-scope enforcement, the pause/approve/deny state
-machine, and a hash-chained audit log where tampering with any past entry is
-detectable.
+**Built:** per-agent cryptographic identity and signed requests, the permission and mission checks, pause / approve / deny / resume, and the tamper-evident audit log — all running over real HTTP between real processes.
 
-**Not yet built:** persistence (everything lives in memory and resets on
-restart), authentication on the dashboard-facing routes (a known, accepted
-gap for this stage), and agent delegation (parent/child agents) is
-scaffolded in the dashboard's types but not wired to anything real on the
-backend.
-
-## Deploying
-
-The backend reads `PORT` and `DASHBOARD_ORIGIN` from the environment
-(falling back to `8787` / `http://localhost:3000` for local dev), and has a
-`start` script — see `sigil-backend/scripts/server.ts`. Set
-`NEXT_PUBLIC_API_BASE` on the dashboard to wherever the backend ends up.
+**Not yet built:**
+- **Persistence** — state is in memory and resets when the server restarts
+- **Auth on dashboard routes** — accepted gap for a prototype
+- **Plugging into a company's existing agent setup** — the demo agent talks to Sigil directly; the plan is to attach once at the framework or cloud level rather than per agent
+- **Sub-agent limits** (a helper agent can never have more permission than its parent) — designed, not wired up
+- **Semantic mission matching** — v0 uses the deterministic check described above
+- **Real third-party tools** — actions in the demo hit mock endpoints; the point is the enforcement, not the integrations
